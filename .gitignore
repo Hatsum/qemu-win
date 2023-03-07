@@ -1,0 +1,7 @@
+build/
+qemu-7.2.0/
+qemu-7.2.0.tar.xz
+virgil3d/MINGW-packages/mingw-w64-x86_64-virglrenderer-0.10.4-1-any.pkg.tar.zst
+virgil3d/MINGW-packages/pkg/
+virgil3d/MINGW-packages/src/
+virgil3d/MINGW-packages/virglrenderer-0.10.4.tar.bz2
