@@ -1,0 +1,123 @@
+# Based on AUR package (https://aur.archlinux.org/packages/djgpp-binutils)
+# Maintainer: Andris Pavenis <andris dot pavenis iki fi>
+# Maintainer: carstene1ns <arch carsten-teibes de>
+# Contributor: felix <base64 -d <<< ZmVsaXgudm9uLnNAcG9zdGVvLmRlCg==>
+# And MinGW package (https://github.com/msys2/MINGW-packages/tree/d9041a437e5f1c95d7f6d3a041ab904121920f5d/mingw-w64-binutils)
+# Maintainer: Alexey Pavlov <alexpux@gmail.com>
+# Contributor: Ray Donnelly <mingw.android@gmail.com>
+# Contributor: Mateusz Mikula <mati865@gmail.com>
+# And Build-DJGPP (https://github.com/andrewwutw/build-djgpp/blob/master/script/12.1.0)
+
+_realname=djgpp-binutils
+pkgbase=mingw-w64-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+pkgver=2.34
+_target="i686-pc-msdosdjgpp"
+pkgrel=1
+pkgdesc="Binutils for the djgpp cross-compiler"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'ucrt64')
+url="http://www.gnu.org/software/binutils"
+license=('GPL3')
+groups=("${MINGW_PACKAGE_PREFIX}-djgpp-toolchain")
+depends=("${MINGW_PACKAGE_PREFIX}-libiconv"
+         "${MINGW_PACKAGE_PREFIX}-zlib")
+makedepends=("${MINGW_PACKAGE_PREFIX}-cc"
+             "${MINGW_PACKAGE_PREFIX}-autotools"
+             "${MINGW_PACKAGE_PREFIX}-libiconv"
+             "${MINGW_PACKAGE_PREFIX}-zlib")
+options=('!libtool' '!emptydirs')
+source=("http://ftp.gnu.org/gnu/binutils/binutils-${pkgver}.tar.xz"{,.sig}
+        "0001-enable-gold-on.mingw32.patch"
+        "0002-check-for-unusual-file-harder.patch"
+        "0010-bfd-Increase-_bfd_coff_max_nscns-to-65279.patch"
+        "0020-binutils_2.31_mkdtemp_impl.patch"
+        "0110-binutils-mingw-gnu-print.patch"
+        "0120-windres-handle-spaces.patch"
+        "1000-PR24511.patch"
+        "1001-PR25447.patch"
+        "binutils-bfd-djgpp.patch"
+        "binutils-djgpp.patch"
+        "lto-discard.patch")
+sha256sums=('f00b0e8803dc9bab1e2165bd568528135be734df3fabf8d0161828cd56028952'
+            'SKIP'
+            '93296b909e1a4f9d8a4bbe2437aafa17ca565ef6642a9812b0360c05be228c9d'
+            '2c99345fc575c3a060d6677537f636c6c4154fac0fde508070f3b6296c1060d4'
+            '604e76e0f702ced493ee22aa3c1768b4776b2008a7d70ae0dd35fe5be3522141'
+            '34ba6c001ff7f95ae1da0619c73130112b76d0d2a31bb8a00602eb22f1f84cb8'
+            'd0d5d7fbf26b4ea902583ca5cd03fe1721adc0582f05f4ce9595f6b0a1f3c4d8'
+            '86ae90d997e986a54aaebb5251f3a71800b0c5c3f5b57b9094a42995e9f5c478'
+            'ee802df23360ad8b51cbc52aa0845916bb36098fbe6940e93a8f4c74ac5f18e9'
+            'c1363575e0a13c7cacc696b68bedf2937c872422d6af286a7dc25f8b9c678ba7'
+            '1c2000eab25c4f4c3d9962ea4b32a7f0067c23478980c1b73663f237929ad036'
+            '1c786d5e7a313533ec2b54fc56248bcfceb64f5231ef7722a84524f8ce11ead3'
+            '4cd5c23535918d19579533a027a643e4caaf5fc43563beb74c2d6b4dfd5ca768')
+validpgpkeys=('3A24BC1E8FB409FA9F14371813FCEF89DD9E3C4F')
+
+prepare() {
+  cd ${srcdir}/binutils-${pkgver}
+  
+  # Apply MinGW patches
+  patch -p1 -i "${srcdir}"/0001-enable-gold-on.mingw32.patch
+  patch -p1 -i "${srcdir}"/0002-check-for-unusual-file-harder.patch
+  patch -p1 -i "${srcdir}"/0010-bfd-Increase-_bfd_coff_max_nscns-to-65279.patch
+  patch -p1 -i "${srcdir}"/0020-binutils_2.31_mkdtemp_impl.patch
+  patch -p1 -i "${srcdir}"/0110-binutils-mingw-gnu-print.patch
+  patch -p1 -i "${srcdir}"/0120-windres-handle-spaces.patch
+  patch -p1 -i "${srcdir}"/1000-PR24511.patch
+  patch -p1 -i "${srcdir}"/1001-PR25447.patch
+
+  # Apply DJGPP related patches from
+  # ftp://ftp.delorie.com/pub/djgpp/current/v2gnu/bnu234s.zip
+  patch -Np1 <${srcdir}/binutils-djgpp.patch
+  patch -Np1 <${srcdir}/binutils-bfd-djgpp.patch
+  patch -Np2 <${srcdir}/lto-discard.patch
+}
+
+build() {
+  [[ -d ${srcdir}/build-${_target} ]] && rm -rf ${srcdir}/build-${_target}
+  mkdir -p ${srcdir}/build-${_target} && cd ${srcdir}/build-${_target}
+  
+  if check_option "debug" "y"; then
+    CFLAGS+=" -O0"
+  else
+    CFLAGS+=" -O2"
+  fi
+  
+  ../binutils-${pkgver}/configure \
+    --build=${MINGW_CHOST} \
+    --host=${MINGW_CHOST} \
+    --target=${_target} \
+    --prefix=${MINGW_PREFIX} \
+    --infodir="${MINGW_PREFIX}/share/info/${_target}" \
+    --datadir="${MINGW_PREFIX}/${_target}/share" \
+    --disable-werror \
+    --enable-lto \
+    --with-sysroot=${MINGW_PREFIX} \
+    --with-libiconv-prefix=${MINGW_PREFIX} \
+    ${extra_config[@]} \
+    --disable-nls \
+    --disable-rpath \
+    --disable-multilib \
+    --disable-install-libiberty
+  
+  make -j$(($(nproc)+1))
+}
+
+check() {
+  cd ${srcdir}/build-${_target}
+
+  # unset LDFLAGS as testsuite makes assumptions about which ones are active
+  # do not abort on errors - manually check log files
+  make LDFLAGS="" -k check || true
+}
+
+package() {
+  cd ${srcdir}/build-${_target}
+  make DESTDIR=${pkgdir} install
+
+  install -Dm644 ${srcdir}/binutils-${pkgver}/COPYING      ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}/${_realname}/COPYING
+  install -Dm644 ${srcdir}/binutils-${pkgver}/COPYING.LIB  ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}/${_realname}/COPYING.LIB
+  install -Dm644 ${srcdir}/binutils-${pkgver}/COPYING3     ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}/${_realname}/COPYING3
+  install -Dm644 ${srcdir}/binutils-${pkgver}/COPYING3.LIB ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}/${_realname}/COPYING3.LIB
+}

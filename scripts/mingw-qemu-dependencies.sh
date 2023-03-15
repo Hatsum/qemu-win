@@ -83,4 +83,6 @@ pacman -S --needed --noconfirm \
 # build and install virgil dependency
 cd virgil3d/MINGW-packages
 makepkg-mingw -sCf
-pacman --noconfirm -U mingw-w64-x86_64-virglrenderer*.pkg.tar.zst
+pacman --noconfirm -U ${MINGW_PACKAGE_PREFIX}-virglrenderer*.pkg.tar.zst
+
+cd ../..

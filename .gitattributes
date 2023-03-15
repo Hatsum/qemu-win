@@ -11,4 +11,6 @@
 # in Unix via a file share from Windows, the scripts will work.
 *.sh text eol=lf
 *.bash text eol=lf
+*.diff text eol=lf
+*.patch text eol=lf
 PKGBUILD text eol=lf

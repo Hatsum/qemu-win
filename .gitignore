@@ -1,6 +1,13 @@
 build/
+buildenv/**/pkg/
+buildenv/**/src/
+buildenv/**/*.sig
+buildenv/**/*.tar.xz
+buildenv/**/*.tar.zst
+buildenv/**/*.zip
 qemu-7.2.0/
 qemu-7.2.0.tar.xz
+qemu-bin
 virgil3d/MINGW-packages/mingw-w64-x86_64-virglrenderer-0.10.4-1-any.pkg.tar.zst
 virgil3d/MINGW-packages/pkg/
 virgil3d/MINGW-packages/src/

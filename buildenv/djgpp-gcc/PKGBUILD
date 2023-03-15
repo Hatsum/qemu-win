@@ -1,0 +1,240 @@
+# Based on AUR package (https://aur.archlinux.org/packages/djgpp-gcc)
+# Maintainer: Andris Pavenis <andris.pavenis iki fi>
+# Maintainer: carstene1ns <arch carsten-teibes de>
+# Contributor: felix <base64 -d <<< ZmVsaXgudm9uLnNAcG9zdGVvLmRlCg==>
+# And MinGW package (https://github.com/msys2/MINGW-packages/tree/master/mingw-w64-gcc)
+# Maintainer:  Alexey Pavlov <alexpux@gmail.com>
+# Contributor: Alexey Borzenkov <snaury@gmail.com>
+# Contributor: Ray Donnelly <mingw.android@gmail.com>
+# Contributor: Renato Silva <br.renatosilva@gmail.com>
+# Contributor: wirx6 <wirx654@gmail.com>
+# Contributor: Kirill Müller <krlmlr@mailbox.org>
+# And Build-DJGPP (https://github.com/andrewwutw/build-djgpp/blob/master/script/12.1.0)
+
+_enable_fortran=no
+_enable_ada=no
+_enable_objc=no
+_enable_jit=no
+_realname=djgpp-gcc
+pkgbase=mingw-w64-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+pkgver=12.2.0
+_target="i686-pc-msdosdjgpp"
+pkgrel=1
+pkgdesc="GCC for the djgpp cross-compiler"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'ucrt64')
+url="https://gcc.gnu.org"
+license=('GPL3' 'LGPL3' 'FDL' 'custom')
+groups=("${MINGW_PACKAGE_PREFIX}-djgpp-toolchain")
+makedepends=("${MINGW_PACKAGE_PREFIX}-gcc=${pkgver}"
+             $([[ "$_enable_ada" == "yes" ]] && echo "${MINGW_PACKAGE_PREFIX}-gcc-ada=${pkgver}")
+             "${MINGW_PACKAGE_PREFIX}-djgpp-binutils>=2.34"
+             "${MINGW_PACKAGE_PREFIX}-crt"
+             "${MINGW_PACKAGE_PREFIX}-headers"
+             "${MINGW_PACKAGE_PREFIX}-gmp"
+             "${MINGW_PACKAGE_PREFIX}-isl"
+             "${MINGW_PACKAGE_PREFIX}-libiconv"
+             "${MINGW_PACKAGE_PREFIX}-mpc"
+             "${MINGW_PACKAGE_PREFIX}-mpfr"
+             "${MINGW_PACKAGE_PREFIX}-zlib"
+             "${MINGW_PACKAGE_PREFIX}-zstd"
+             "${MINGW_PACKAGE_PREFIX}-gperf"
+             "${MINGW_PACKAGE_PREFIX}-autotools")
+optdepends=("${MINGW_PACKAGE_PREFIX}-djgpp-djcrx: headers and utilities"
+            "${MINGW_PACKAGE_PREFIX}-djgpp-djcrx-bootstrap: first build of djgpp-gcc before djgpp-djcrx is built")
+options=('!strip' 'staticlibs' '!emptydirs' '!buildflags')
+source=("https://ftp.gnu.org/gnu/gcc/gcc-$pkgver/gcc-$pkgver.tar.xz"{,.sig}
+        "gdbinit"
+        "0002-Relocate-libintl.patch"
+        "0003-Windows-Follow-Posix-dir-exists-semantics-more-close.patch"
+        "0004-Windows-Use-not-in-progpath-and-leave-case-as-is.patch"
+        "0005-Windows-Don-t-ignore-native-system-header-dir.patch"
+        "0006-Windows-New-feature-to-allow-overriding.patch"
+        "0007-Build-EXTRA_GNATTOOLS-for-Ada.patch"
+        "0008-Prettify-linking-no-undefined.patch"
+        "0010-Fix-using-large-PCH.patch"
+        "0011-Enable-shared-gnat-implib.patch"
+        "0012-Handle-spaces-in-path-for-default-manifest.patch"
+        "0014-gcc-9-branch-clone_function_name_1-Retain-any-stdcall-suffix.patch"
+        "0020-libgomp-Don-t-hard-code-MS-printf-attributes.patch"
+        "0021-PR14940-Allow-a-PCH-to-be-mapped-to-a-different-addr.patch"
+        "0140-gcc-diagnostic-color.patch"
+        "0200-add-m-no-align-vector-insn-option-for-i386.patch"
+        "0300-override-builtin-printf-format.patch"
+        "lto.patch"
+        "gcc-djgpp.diff"
+        "patch-gcc12-mingw.patch")
+sha256sums=('e549cf9cf3594a00e27b6589d4322d70e0720cdd213f39beb4181e06926230ff'
+            'SKIP'
+            'bce81824fc89e5e62cca350de4c17a27e27a18a1a1ad5ca3492aec1fc5af3234'
+            '2c1a5fdb39d8ecf449632b0ebdd4b41bf9e070aea4093f299513cad95484b5c3'
+            '3f55d6493d459f6b875f750735231df140339b62eb0d2cc5edfbf10332c1bd5f'
+            'be1dd73bca4e802df5e263a2b27355c3b42d7298491b94fdcc35e00be2e2cb68'
+            '2a208d5b13f370c6b2187c7932a13d6caedfc3722f02afc8e5ee9426fb8e64cc'
+            '56832cb8f939fe14eaadf8fb2d4c784012acc87e1661320398b42b7389643bb7'
+            '87472619bb0f9520cce20e3e5f5f57b9ab1fbea297bc81cb00216697d64084b1'
+            'd7066b206d7b4d81a25d4f9c2ee88751e041b81176d915d8175b9b85f5cbc425'
+            'acaf6f1b8df91bf0fe7c363b2abd10c2f7b967b563761160892559358da9bf91'
+            'b1ddd82c9a4f0cd7ba3a4877510b56b019304d04ed1d804626eb511ae206dd60'
+            '0483451eaed8b36b8fbdc30d10a04d73424d58ca83dde0320902d39f0ef623a6'
+            'b3c6dc1fe61ba3c46d15b5bd38f4a94cd8133923eb9832679944f534d46f7318'
+            'a501666d1f5cae726f2b2f1618d187a397c3525c0ffa1bcb03a441fd8e8020cf'
+            'a4b4f7e97635ddf0443ee17cd093b9d10953f97eb290466999585d02ef8bf72d'
+            'e0a5b470f49a29f20215cc9f9d04c1cb9969dff6f0e546542799d3a693ef1c84'
+            'ce832a1be7271a2249e4dd46647474b37cf51f578678d9bd9433b32aacefb528'
+            '0d82cf1d748c9f1d4d3c7ee43ca3be1b6efbd431dc13ce652ae00ee489d67eec'
+            'c03dbd61274e1ce14f84366abf348d75779bbd6e0bc32b9f4fd74f1ce54a5ef0'
+            '0c93c245f791d638cd775b00f9919873b229a4dda04a7a4072735d12d47737ce'
+            '480947c4821e853393a4cbdf5dd51e1dc77e1b6edbab4616aad0d7804cf88bf2')
+validpgpkeys=('13975A70E63C361C73AE69EF6EEB81F8981C74C7') # Jakub Jelinek <jakub@redhat.com>
+
+# Helper macros to help make tasks easier #
+apply_patch_with_msg() {
+  for _patch in "$@"
+  do
+    msg2 "Applying ${_patch}"
+    patch -Nbp1 -i "${srcdir}/${_patch}"
+  done
+}
+
+del_file_exists() {
+  for _fname in "$@"
+  do
+    if [ -f ${_fname} ]; then
+      rm -rf ${_fname}
+    fi
+  done
+}
+# =========================================== #
+
+prepare() {
+  cd ${srcdir}/gcc-$pkgver
+  # del_file_exists \
+    # intl/canonicalize.c \
+    # intl/canonicalize.h \
+    # intl/relocatex.c intl/relocatex.h
+
+  # apply_patch_with_msg \
+    # 0002-Relocate-libintl.patch \
+    # 0003-Windows-Follow-Posix-dir-exists-semantics-more-close.patch \
+    # 0004-Windows-Use-not-in-progpath-and-leave-case-as-is.patch \
+    # 0005-Windows-Don-t-ignore-native-system-header-dir.patch \
+    # 0006-Windows-New-feature-to-allow-overriding.patch \
+    # 0007-Build-EXTRA_GNATTOOLS-for-Ada.patch \
+    # 0008-Prettify-linking-no-undefined.patch \
+    # 0010-Fix-using-large-PCH.patch \
+    # 0011-Enable-shared-gnat-implib.patch \
+    # 0012-Handle-spaces-in-path-for-default-manifest.patch \
+    # 0014-gcc-9-branch-clone_function_name_1-Retain-any-stdcall-suffix.patch \
+    # 0020-libgomp-Don-t-hard-code-MS-printf-attributes.patch \
+    0021-PR14940-Allow-a-PCH-to-be-mapped-to-a-different-addr.patch
+
+  # Enable diagnostic color under mintty
+  # based on https://github.com/BurntSushi/ripgrep/issues/94#issuecomment-261761687
+  # apply_patch_with_msg \
+    # 0140-gcc-diagnostic-color.patch
+
+  # workaround for AVX misalignment issue for pass-by-value arguments
+  #   cf. https://github.com/msys2/MSYS2-packages/issues/1209
+  #   cf. https://sourceforge.net/p/mingw-w64/discussion/723797/thread/bc936130/ 
+  #  Issue is longstanding upstream at https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
+  #  Potential alternative: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=939559
+  # https://github.com/msys2/MINGW-packages/pull/8317#issuecomment-824548411
+  # apply_patch_with_msg \
+    # 0200-add-m-no-align-vector-insn-option-for-i386.patch
+
+  # Patch from https://gcc.gnu.org/pipermail/gcc-patches/2022-January/588341.html
+  # Related bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95130
+  # apply_patch_with_msg \
+    # 0300-override-builtin-printf-format.patch
+
+  # do not expect ${prefix}/mingw symlink - this should be superceded by
+  # 0005-Windows-Don-t-ignore-native-system-header-dir.patch .. but isn't!
+  # sed -i 's/${prefix}\/mingw\//${prefix}\//g' configure
+
+  # change hardcoded /mingw prefix to the real prefix .. isn't this rubbish?
+  # it might work at build time and could be important there but beyond that?!
+  # local MINGW_NATIVE_PREFIX=$(cygpath -am ${MINGW_PREFIX})
+  # sed -i "s#\\/mingw\\/#${MINGW_NATIVE_PREFIX//\//\\/}\\/#g" gcc/config/i386/mingw32.h
+
+  # build the lto plugin
+  patch -Np0 < ../lto.patch
+
+  # Other DJGPP related changes
+  patch -Np1 < ../gcc-djgpp.diff
+  
+  patch -Np0 < ../patch-gcc12-mingw.patch
+}
+
+build() {
+  [[ -d ${srcdir}/build-${_target} ]] && rm -rf ${srcdir}/build-${_target}
+  mkdir -p ${srcdir}/build-${_target} && cd ${srcdir}/build-${_target}
+  
+  if check_option "debug" "y"; then
+    CFLAGS+=" -O0"
+  else
+    CFLAGS+=" -O2"
+  fi
+  
+  local _languages="c,c++"
+  if [ "$_enable_fortran" == "yes" ]; then
+    _languages+=",fortran"
+  fi
+  if [ "$_enable_ada" == "yes" ]; then
+    _languages+=",ada"
+  fi
+  if [ "$_enable_objc" == "yes" ]; then
+    _languages+=",objc,obj-c++"
+  fi
+  if [ "$_enable_jit" == "yes" ]; then
+    _languages+=",jit"
+  fi
+
+  ../gcc-$pkgver/configure \
+    --prefix=${MINGW_PREFIX} \
+    --target="${_target}" \
+    --host=${MINGW_CHOST} \
+    --enable-languages=${_languages} \
+    --enable-shared \
+    --enable-static \
+    --enable-threads=no \
+    --with-system-zlib \
+    --with-{gmp,mpfr,mpc}=${MINGW_PREFIX} \
+    --enable-lto \
+    --disable-nls \
+    --disable-plugin \
+    --disable-libgomp \
+    --disable-multilib \
+    --enable-checking=release \
+    --disable-libstdcxx-pch \
+    --enable-libstdcxx-filesystem-ts \
+    --enable-version-specific-runtime-libs \
+    --enable-libquadmath-support \
+    --disable-install-libiberty
+
+  make all -j$(($(nproc)+1))
+}
+
+package_djgpp-gcc() {
+  cd ${srcdir}/build-${_target}
+  make DESTDIR="$pkgdir/" install
+
+  # strip manually, djgpp libs spew errors otherwise
+  for fn in cc1 cc1plus cc1obj cc1objplus f951 lto1 lto-wrapper gnat1; do
+    file=${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/$fn
+    if [ -f $file ] ; then strip $file; else echo $file not found; fi
+  done
+
+  ${_target}-strip -v -g ${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/*.a
+  ${_target}-strip -v -g ${pkgdir}${MINGW_PREFIX}/${_target}/lib/*.a
+
+  # for compatibility
+  ln -s ${_target}-gcc ${pkgdir}${MINGW_PREFIX}/bin/${_target}-cc
+
+  # remove unnecessary files
+  rm -rf ${pkgdir}${MINGW_PREFIX}/share/{man/man7,info,locale}
+  rm -rf ${pkgdir}${MINGW_PREFIX}/share/gcc-$pkgver/python
+  rm -rf ${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/include-fixed
+  rm -f ${pkgdir}${MINGW_PREFIX}/lib*/libcc1.*
+}

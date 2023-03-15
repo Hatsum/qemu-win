@@ -1,16 +1,17 @@
 # Update msys2
 pacman -Syuu --needed --noconfirm
-# restart
+# Restart msys2 and reexecute the command
 pacman -Syuu --needed --noconfirm
-# install dependencies
-./scripts/msys2-base.sh
-./scripts/msys2-qemu-dependencies.sh
-pacman -Scc --needed --noconfirm
 
-# Docker (don't work currently, see https://github.com/msys2/msys2-runtime/issues/59)
-# Inspire by https://hub.docker.com/r/amitie10g/msys2
-docker build -t hatsum/msys2 -f docker\msys2\dockerfile .
+# In MSYS environment
+./scripts/msys-base.sh
+./scripts/msys-build-env.sh
 
-docker build -t hatsum/msys2-qemu -f docker\msys2-qemu\dockerfile .
+# In MINGW32 environment
+./scripts/mingw-build-env.sh
+./scripts/mingw-wrapper-dependencies.sh
 
-docker run --rm -it -e MSYSTEM=MINGW64 -v ${pwd}:C:\Users\ContainerUser\qemu-win -w C:\Users\ContainerUser\qemu-win hatsum/msys2-qemu:latest
+# In MINGW64 environment
+./scripts/mingw-qemu-dependencies.sh
+./scripts/mingw-qemu-make.sh
+./scripts/mingw-qemu-release.sh
