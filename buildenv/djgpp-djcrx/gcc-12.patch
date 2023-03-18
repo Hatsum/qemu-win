@@ -36,8 +36,8 @@ diff -r -U3 a/src/libemu/src/makefile b/src/libemu/src/makefile
  # FIXME: fix emu387.cc instead to avoid need for -fno-strict-aliasing
 
  %.o : %.cc
--       $(XNOPGGPP) -c -fno-exceptions -fno-strict-aliasing $<
-+       $(XNOPGGPP) -c -fno-exceptions -fno-strict-aliasing -Wno-register $<
+-	$(XNOPGGPP) -c -fno-exceptions -fno-strict-aliasing $<
++	$(XNOPGGPP) -c -fno-exceptions -fno-strict-aliasing -Wno-register $<
 
  %.o : %.c
         $(XNOPGGCC) -c $<

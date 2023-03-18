@@ -15,3 +15,8 @@ pacman -Syuu --needed --noconfirm
 ./scripts/mingw-qemu-dependencies.sh
 ./scripts/mingw-qemu-make.sh
 ./scripts/mingw-qemu-release.sh
+
+
+
+-D'WINVER=0x0400' -D'_WIN32_WINNT=0x0400' -D'_USE_32BIT_TIME_T' -static-libgcc -static-libstdc++ 
+unicows

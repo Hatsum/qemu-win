@@ -17,7 +17,8 @@ pacman -S --needed --noconfirm \
   ${MINGW_PACKAGE_PREFIX}-mpc \
   ${MINGW_PACKAGE_PREFIX}-gmp \
   ${MINGW_PACKAGE_PREFIX}-isl \
-  ${MINGW_PACKAGE_PREFIX}-gperf
+  ${MINGW_PACKAGE_PREFIX}-gperf \
+  ${MINGW_PACKAGE_PREFIX}-libc++
 
 # install djgpp
 cd buildenv/djgpp-binutils
@@ -33,5 +34,10 @@ cd ../djgpp-gcc
 gpg --recv-keys 3AB00996FC26A641
 makepkg-mingw -sCf
 pacman --noconfirm -U ${MINGW_PACKAGE_PREFIX}-djgpp-gcc*.pkg.tar.zst
+
+cd ../djgpp-djcrx
+makepkg-mingw -sCf
+pacman --noconfirm -Runs ${MINGW_PACKAGE_PREFIX}-djgpp-djcrx-bootstrap
+pacman --noconfirm -U ${MINGW_PACKAGE_PREFIX}-djgpp-djcrx*.pkg.tar.zst
 
 cd ../..

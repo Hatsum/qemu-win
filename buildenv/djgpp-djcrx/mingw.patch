@@ -1,0 +1,68 @@
+diff -r -U3 a/src/libm/math/makefile b/src/libm/math/makefile
+--- a/src/libm/math/makefile    2023-03-18 23:27:40.332024000 +0100
++++ b/src/libm/math/makefile    2023-03-18 23:38:50.490639300 +0100
+@@ -206,7 +206,7 @@
+ CFLAGS = -D_USE_LIBM_MATH_H
+ EXTRA_FILES = $(TOP)/../../info/libm.info
+ # chew emits non-fatal warnings, so we redirect them to the void
+-CHEW = ./chew.exe -f ./doc.str -e /dev/null
++CHEW = ./chew.exe -f ./doc.str -e chew_error.log
+
+ # Common rules and targets
+ include $(TOP)/../makefile.inc
+diff -r -U3 a/src/makefile.def b/src/makefile.def
+--- a/src/makefile.def  2023-03-18 23:41:59.280966600 +0100
++++ b/src/makefile.def  2023-03-19 00:02:34.475349400 +0100
+@@ -3,7 +3,9 @@
+
+ #  These define the cross-to-djgpp and native programs.
+
+-ifneq ($(COMSPEC),)
++ifeq ($(findstring MINGW,$(MSYSTEM)),MINGW)
++CROSS_BUILD = 1
++else ifneq ($(COMSPEC),)
+ CROSS_BUILD = 0
+ else
+ CROSS_BUILD = 1
+diff -r -U3 a/src/makemake.c b/src/makemake.c
+--- a/src/makemake.c    2015-05-11 06:48:38.000000000 +0200
++++ b/src/makemake.c    2023-03-18 23:35:53.554445900 +0100
+@@ -195,11 +195,11 @@
+     printf("makemake: scanning %s for makefiles\n", notepwd);
+
+   if (!do_oh_files)
+-    mf = fopen("makefile.sub", "w");
++    mf = fopen("makefile.sub", "wb");
+   else
+   {
+-    oi = fopen("makefile.oi", "w");
+-    rf = fopen("makefile.rf2", "w");
++    oi = fopen("makefile.oi", "wb");
++    rf = fopen("makefile.rf2", "wb");
+   }
+
+   if (!do_oh_files)
+diff -r -U3 a/src/misc.c b/src/misc.c
+--- a/src/misc.c        2015-05-02 06:31:59.000000000 +0200
++++ b/src/misc.c        2023-03-18 23:38:00.130150300 +0100
+@@ -6,6 +6,11 @@
+ #include <sys/stat.h>
+ #include <unistd.h>
+
++#if (defined(_WIN32) || defined(__WIN32__))
++#include <direct.h> /* _mkdir */
++#define mkdir(x, y) _mkdir(x)
++#endif
++
+ /* Miscellaneous things that are hard to do the same
+    between Unix and MS-DOS */
+
+@@ -26,7 +31,7 @@
+       f = stdout;
+     else
+     {
+-      f = fopen(argv[2], "w");
++      f = fopen(argv[2], "wb");
+       if (f == 0)
+       {
+        perror(argv[2]);

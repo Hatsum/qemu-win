@@ -14,10 +14,12 @@
 _enable_fortran=no
 _enable_ada=no
 _enable_objc=no
-_enable_jit=no
 _realname=djgpp-gcc
 pkgbase=mingw-w64-${_realname}
-pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}"
+         $([[ "$_enable_fortran" == "yes" ]] && echo "${MINGW_PACKAGE_PREFIX}-${_realname}-fortran")
+         $([[ "$_enable_ada" == "yes" ]] && echo "${MINGW_PACKAGE_PREFIX}-${_realname}-ada")
+         $([[ "$_enable_objc" == "yes" ]] && echo "${MINGW_PACKAGE_PREFIX}-${_realname}-objc"))
 pkgver=12.2.0
 _target="i686-pc-msdosdjgpp"
 pkgrel=1
@@ -25,13 +27,11 @@ pkgdesc="GCC for the djgpp cross-compiler"
 arch=('any')
 mingw_arch=('mingw32' 'mingw64' 'ucrt64')
 url="https://gcc.gnu.org"
-license=('GPL3' 'LGPL3' 'FDL' 'custom')
+license=('GPL3' 'LGPL3' 'FDL' 'GPL3+' partial:'GCCRLE' partial:'LGPL2+' 'custom')
 groups=("${MINGW_PACKAGE_PREFIX}-djgpp-toolchain")
 makedepends=("${MINGW_PACKAGE_PREFIX}-gcc=${pkgver}"
              $([[ "$_enable_ada" == "yes" ]] && echo "${MINGW_PACKAGE_PREFIX}-gcc-ada=${pkgver}")
              "${MINGW_PACKAGE_PREFIX}-djgpp-binutils>=2.34"
-             "${MINGW_PACKAGE_PREFIX}-crt"
-             "${MINGW_PACKAGE_PREFIX}-headers"
              "${MINGW_PACKAGE_PREFIX}-gmp"
              "${MINGW_PACKAGE_PREFIX}-isl"
              "${MINGW_PACKAGE_PREFIX}-libiconv"
@@ -45,7 +45,6 @@ optdepends=("${MINGW_PACKAGE_PREFIX}-djgpp-djcrx: headers and utilities"
             "${MINGW_PACKAGE_PREFIX}-djgpp-djcrx-bootstrap: first build of djgpp-gcc before djgpp-djcrx is built")
 options=('!strip' 'staticlibs' '!emptydirs' '!buildflags')
 source=("https://ftp.gnu.org/gnu/gcc/gcc-$pkgver/gcc-$pkgver.tar.xz"{,.sig}
-        "gdbinit"
         "0002-Relocate-libintl.patch"
         "0003-Windows-Follow-Posix-dir-exists-semantics-more-close.patch"
         "0004-Windows-Use-not-in-progpath-and-leave-case-as-is.patch"
@@ -67,7 +66,6 @@ source=("https://ftp.gnu.org/gnu/gcc/gcc-$pkgver/gcc-$pkgver.tar.xz"{,.sig}
         "patch-gcc12-mingw.patch")
 sha256sums=('e549cf9cf3594a00e27b6589d4322d70e0720cdd213f39beb4181e06926230ff'
             'SKIP'
-            'bce81824fc89e5e62cca350de4c17a27e27a18a1a1ad5ca3492aec1fc5af3234'
             '2c1a5fdb39d8ecf449632b0ebdd4b41bf9e070aea4093f299513cad95484b5c3'
             '3f55d6493d459f6b875f750735231df140339b62eb0d2cc5edfbf10332c1bd5f'
             'be1dd73bca4e802df5e263a2b27355c3b42d7298491b94fdcc35e00be2e2cb68'
@@ -110,30 +108,30 @@ del_file_exists() {
 
 prepare() {
   cd ${srcdir}/gcc-$pkgver
-  # del_file_exists \
-    # intl/canonicalize.c \
-    # intl/canonicalize.h \
-    # intl/relocatex.c intl/relocatex.h
+  del_file_exists \
+    intl/canonicalize.c \
+    intl/canonicalize.h \
+    intl/relocatex.c intl/relocatex.h
 
-  # apply_patch_with_msg \
-    # 0002-Relocate-libintl.patch \
-    # 0003-Windows-Follow-Posix-dir-exists-semantics-more-close.patch \
-    # 0004-Windows-Use-not-in-progpath-and-leave-case-as-is.patch \
-    # 0005-Windows-Don-t-ignore-native-system-header-dir.patch \
-    # 0006-Windows-New-feature-to-allow-overriding.patch \
-    # 0007-Build-EXTRA_GNATTOOLS-for-Ada.patch \
-    # 0008-Prettify-linking-no-undefined.patch \
-    # 0010-Fix-using-large-PCH.patch \
-    # 0011-Enable-shared-gnat-implib.patch \
-    # 0012-Handle-spaces-in-path-for-default-manifest.patch \
-    # 0014-gcc-9-branch-clone_function_name_1-Retain-any-stdcall-suffix.patch \
-    # 0020-libgomp-Don-t-hard-code-MS-printf-attributes.patch \
+  apply_patch_with_msg \
+    0002-Relocate-libintl.patch \
+    0003-Windows-Follow-Posix-dir-exists-semantics-more-close.patch \
+    0004-Windows-Use-not-in-progpath-and-leave-case-as-is.patch \
+    0005-Windows-Don-t-ignore-native-system-header-dir.patch \
+    0006-Windows-New-feature-to-allow-overriding.patch \
+    0007-Build-EXTRA_GNATTOOLS-for-Ada.patch \
+    0008-Prettify-linking-no-undefined.patch \
+    0010-Fix-using-large-PCH.patch \
+    0011-Enable-shared-gnat-implib.patch \
+    0012-Handle-spaces-in-path-for-default-manifest.patch \
+    0014-gcc-9-branch-clone_function_name_1-Retain-any-stdcall-suffix.patch \
+    0020-libgomp-Don-t-hard-code-MS-printf-attributes.patch \
     0021-PR14940-Allow-a-PCH-to-be-mapped-to-a-different-addr.patch
 
   # Enable diagnostic color under mintty
   # based on https://github.com/BurntSushi/ripgrep/issues/94#issuecomment-261761687
-  # apply_patch_with_msg \
-    # 0140-gcc-diagnostic-color.patch
+  apply_patch_with_msg \
+    0140-gcc-diagnostic-color.patch
 
   # workaround for AVX misalignment issue for pass-by-value arguments
   #   cf. https://github.com/msys2/MSYS2-packages/issues/1209
@@ -141,22 +139,22 @@ prepare() {
   #  Issue is longstanding upstream at https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412
   #  Potential alternative: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=939559
   # https://github.com/msys2/MINGW-packages/pull/8317#issuecomment-824548411
-  # apply_patch_with_msg \
-    # 0200-add-m-no-align-vector-insn-option-for-i386.patch
+  apply_patch_with_msg \
+    0200-add-m-no-align-vector-insn-option-for-i386.patch
 
   # Patch from https://gcc.gnu.org/pipermail/gcc-patches/2022-January/588341.html
   # Related bug: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=95130
-  # apply_patch_with_msg \
-    # 0300-override-builtin-printf-format.patch
+  apply_patch_with_msg \
+    0300-override-builtin-printf-format.patch
 
   # do not expect ${prefix}/mingw symlink - this should be superceded by
   # 0005-Windows-Don-t-ignore-native-system-header-dir.patch .. but isn't!
-  # sed -i 's/${prefix}\/mingw\//${prefix}\//g' configure
+  sed -i 's/${prefix}\/mingw\//${prefix}\//g' configure
 
   # change hardcoded /mingw prefix to the real prefix .. isn't this rubbish?
   # it might work at build time and could be important there but beyond that?!
-  # local MINGW_NATIVE_PREFIX=$(cygpath -am ${MINGW_PREFIX})
-  # sed -i "s#\\/mingw\\/#${MINGW_NATIVE_PREFIX//\//\\/}\\/#g" gcc/config/i386/mingw32.h
+  local MINGW_NATIVE_PREFIX=$(cygpath -am ${MINGW_PREFIX})
+  sed -i "s#\\/mingw\\/#${MINGW_NATIVE_PREFIX//\//\\/}\\/#g" gcc/config/i386/mingw32.h
 
   # build the lto plugin
   patch -Np0 < ../lto.patch
@@ -177,6 +175,28 @@ build() {
     CFLAGS+=" -O2"
   fi
   
+  declare -a extra_config
+  if check_option "debug" "n"; then
+    extra_config+=("--disable-libstdcxx-debug")
+  else
+    extra_config+=("--enable-libstdcxx-debug")
+  fi
+
+  case "${CARCH}" in
+    i686)
+      extra_config+=(
+        "--disable-sjlj-exceptions"
+        "--with-dwarf2"
+      )
+      LDFLAGS+=" -Wl,--large-address-aware"
+      local _arch=pentium4
+    ;;
+
+    x86_64)
+      local _arch=nocona
+    ;;
+  esac
+  
   local _languages="c,c++"
   if [ "$_enable_fortran" == "yes" ]; then
     _languages+=",fortran"
@@ -187,54 +207,138 @@ build() {
   if [ "$_enable_objc" == "yes" ]; then
     _languages+=",objc,obj-c++"
   fi
-  if [ "$_enable_jit" == "yes" ]; then
-    _languages+=",jit"
-  fi
+
+  # -fstack-protector-strong breaks libssp
+  # https://github.com/msys2/MINGW-packages/issues/13830
+  # TODO: This can be removed once we drop libssp all together
+  CFLAGS+=" -fno-stack-protector"
+
+  # TODO: remove this with gcc 13.x, which includes a proper fix:
+  # https://gcc.gnu.org/git/?p=gcc.git;a=commit;h=902c755930326cb4405672aa3ea13c35c653cbff
+  CPPFLAGS+=" -DWIN32_LEAN_AND_MEAN"
+  # In addition adaint.c does `#include <accctrl.h>` which pulls in msxml.h, hacky hack:
+  CPPFLAGS+=" -DCOM_NO_WINDOWS_H"
 
   ../gcc-$pkgver/configure \
     --prefix=${MINGW_PREFIX} \
-    --target="${_target}" \
+    --target=${_target} \
     --host=${MINGW_CHOST} \
+    --libexecdir=${MINGW_PREFIX}/lib \
     --enable-languages=${_languages} \
     --enable-shared \
     --enable-static \
     --enable-threads=no \
     --with-system-zlib \
-    --with-{gmp,mpfr,mpc}=${MINGW_PREFIX} \
+    --with-{gmp,mpfr,mpc,isl}=${MINGW_PREFIX} \
     --enable-lto \
     --disable-nls \
     --disable-plugin \
     --disable-libgomp \
     --disable-multilib \
     --enable-checking=release \
+    --disable-win32-registry \
     --disable-libstdcxx-pch \
     --enable-libstdcxx-filesystem-ts \
     --enable-version-specific-runtime-libs \
     --enable-libquadmath-support \
-    --disable-install-libiberty
+    --disable-install-libiberty \
+    ${extra_config[@]}
+  
+  # While we're debugging -fopenmp problems at least.
+  # .. we may as well not strip anything.
+  # if check_option "strip" "n"; then
+    # sed -i 's,^STRIP = .*$,STRIP = true,g'                   Makefile
+    # sed -i 's,^STRIP_FOR_TARGET=.*$,STRIP_FOR_TARGET=true,g' Makefile
+  # fi
 
-  make all -j$(($(nproc)+1))
+  make all
+    
+  pkgpath=${srcdir}/pkg${MINGW_PREFIX}
+  rm -rf ${pkgpath}
+  
+  make -j1 DESTDIR=${srcdir}/pkg install
+  if [ "$_enable_ada" == "yes" ]; then
+    mv ${pkgpath}/lib/gcc/${_target}/${pkgver}/adalib/*.dll ${pkgpath}/bin/
+  fi
+  
+  # strip manually, djgpp libs spew errors otherwise
+  strip ${pkgpath}/lib/gcc/${_target}/${pkgver}/*.{exe,dll}
+  strip ${pkgpath}/bin/${_target}-*.exe
+  ${_target}-strip -v -g ${pkgpath}/lib/gcc/${_target}/${pkgver}/*.a
+  
+  mkdir -p ${pkgpath}/${_target}/bin
+  for b in ${pkgpath}/bin/${_target}-*.exe ; do
+    cp $b ${pkgpath}/${_target}/bin/${b#${pkgpath}/bin/${_target}-}
+  done
 }
 
 package_djgpp-gcc() {
-  cd ${srcdir}/build-${_target}
-  make DESTDIR="$pkgdir/" install
+  pkgdesc="GNU Compiler Collection (C,C++,OpenMP) for djgpp cross-compiler"
+  depends=("${MINGW_PACKAGE_PREFIX}-djgpp-binutils>=2.34"
+           "${MINGW_PACKAGE_PREFIX}-isl"
+           "${MINGW_PACKAGE_PREFIX}-libiconv"
+           "${MINGW_PACKAGE_PREFIX}-gmp"
+           "${MINGW_PACKAGE_PREFIX}-mpfr"
+           "${MINGW_PACKAGE_PREFIX}-mpc"
+           "${MINGW_PACKAGE_PREFIX}-zlib"
+           "${MINGW_PACKAGE_PREFIX}-zstd")
 
-  # strip manually, djgpp libs spew errors otherwise
-  for fn in cc1 cc1plus cc1obj cc1objplus f951 lto1 lto-wrapper gnat1; do
-    file=${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/$fn
-    if [ -f $file ] ; then strip $file; else echo $file not found; fi
-  done
+  pkgpath=${pkgdir}${MINGW_PREFIX}
+  mkdir -p ${pkgpath}/{bin,lib,share,${_target}/bin}
+  
+  cd ${srcdir}/pkg${MINGW_PREFIX}
+  
+  cp bin/${_target}-{{c,g}++,cpp,gcc{,-{${pkgver},ar,nm,ranlib}},gcov{,-dump,-tool},lto-dump}.exe ${pkgpath}/bin/
+  cp bin/${_target}-gcc.exe                                                                       ${pkgpath}/bin/${_target}-cc.exe
+  cp ${_target}/bin/{{c,g}++,cpp,gcc{,-{${pkgver},ar,nm,ranlib}},gcov{,-dump,-tool},lto-dump}.exe ${pkgpath}/${_target}/bin/
+  cp ${_target}/bin/gcc.exe                                                                       ${pkgpath}/${_target}/bin/cc.exe
 
-  ${_target}-strip -v -g ${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/*.a
-  ${_target}-strip -v -g ${pkgdir}${MINGW_PREFIX}/${_target}/lib/*.a
+  libgccpath=${pkgpath}/lib/gcc/${_target}/${pkgver}
+  mkdir -p ${libgccpath}/include
+  
+  cp lib/gcc/${_target}/${pkgver}/include/*.h                                       ${libgccpath}/include/
+  cp -r lib/gcc/${_target}/${pkgver}/include/{c++,ssp}                              ${libgccpath}/include/
+  cp -r lib/gcc/${_target}/${pkgver}/include-fixed                                  ${libgccpath}/
+  cp -r lib/gcc/${_target}/${pkgver}/install-tools                                  ${libgccpath}/
+  cp lib/gcc/${_target}/${pkgver}/lib{gcc,gcov,quadmath,ssp,stdc++,supc++}*         ${libgccpath}/
+  cp -r lib/gcc/${_target}/${pkgver}/install-tools                                  ${libgccpath}/
+  cp lib/gcc/${_target}/${pkgver}/{cc1{,plus},collect2,g++-mapper-server,lto*}.exe  ${libgccpath}/
+  cp lib/gcc/${_target}/${pkgver}/liblto*                                           ${libgccpath}/
 
-  # for compatibility
-  ln -s ${_target}-gcc ${pkgdir}${MINGW_PREFIX}/bin/${_target}-cc
+  sharepath=${pkgpath}/share
+  infopath=${sharepath}/info/${_target}
+  mkdir -p ${pkgpath}/share/{info/${_target},man,licenses/${_target}/${_realname}}
+  
+  cp share/info/{cpp{,internals},gcc{,install,int},libquadmath}.info*   ${infopath}/
 
-  # remove unnecessary files
-  rm -rf ${pkgdir}${MINGW_PREFIX}/share/{man/man7,info,locale}
-  rm -rf ${pkgdir}${MINGW_PREFIX}/share/gcc-$pkgver/python
-  rm -rf ${pkgdir}${MINGW_PREFIX}/lib/gcc/${_target}/$pkgver/include-fixed
-  rm -f ${pkgdir}${MINGW_PREFIX}/lib*/libcc1.*
+  manpath=${sharepath}/man
+  mkdir -p ${manpath}/man{1,7/${_target}/${_realname}}
+  
+  cp share/man/man1/${_target}-{cpp,g++,gcc,gcov{,-dump,-tool},lto-dump}.1* ${manpath}/man1/
+  cp share/man/man7/{fsf-funding,gfdl,gpl}.7                                ${manpath}/man7/${_target}/${_realname}/
+  
+  licensespath=${sharepath}/licenses/${_target}/${_realname}
+  cat << ENDFILE > ${licensespath}/README
+The libgcc, libssp, libstdc++, libgomp and libatomic libraries are covered by
+GPL3+ with the GCC Runtime Library Exception. The libquadmath library is covered
+by LGPL2+. The package as a whole can be redistributed under GPL3+.
+ENDFILE
+  install -Dm644 ${srcdir}/gcc-${pkgver}/COPYING          ${licensespath}/COPYING
+  install -Dm644 ${srcdir}/gcc-${pkgver}/COPYING.LIB      ${licensespath}/COPYING.LIB
+  install -Dm644 ${srcdir}/gcc-${pkgver}/COPYING.RUNTIME  ${licensespath}/COPYING.RUNTIME
+  install -Dm644 ${srcdir}/gcc-${pkgver}/COPYING3         ${licensespath}/COPYING3
+  install -Dm644 ${srcdir}/gcc-${pkgver}/COPYING3.LIB     ${licensespath}/COPYING3.LIB
 }
+
+# TODO: build other languages
+
+# template start; name=mingw-w64-splitpkg-wrappers; version=1.0;
+# vim: set ft=bash :
+
+# generate wrappers
+for _name in "${pkgname[@]}"; do
+  _short="package_${_name#${MINGW_PACKAGE_PREFIX}-}"
+  _func="$(declare -f "${_short}")"
+  eval "${_func/#${_short}/package_${_name}}"
+done
+# template end;

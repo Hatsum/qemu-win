@@ -84,8 +84,13 @@ build() {
     CFLAGS+=" -O2"
   fi
   
+  declare -a extra_config
+  case "${CARCH}" in
+    i686) LDFLAGS+=" -Wl,--large-address-aware" ;;
+    x86_64) extra_config+=("--enable-64-bit-bfd") ;;
+  esac
+  
   ../binutils-${pkgver}/configure \
-    --build=${MINGW_CHOST} \
     --host=${MINGW_CHOST} \
     --target=${_target} \
     --prefix=${MINGW_PREFIX} \
@@ -95,13 +100,13 @@ build() {
     --enable-lto \
     --with-sysroot=${MINGW_PREFIX} \
     --with-libiconv-prefix=${MINGW_PREFIX} \
-    ${extra_config[@]} \
     --disable-nls \
     --disable-rpath \
     --disable-multilib \
-    --disable-install-libiberty
+    --disable-install-libiberty \
+    ${extra_config[@]}
   
-  make -j$(($(nproc)+1))
+  make
 }
 
 check() {

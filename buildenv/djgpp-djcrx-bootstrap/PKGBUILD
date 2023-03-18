@@ -20,7 +20,7 @@ mingw_arch=('mingw32' 'mingw64' 'ucrt64')
 url="http://www.delorie.com/djgpp/"
 license=(GPL LGPL custom:djgpp)
 groups=("${MINGW_PACKAGE_PREFIX}-djgpp-toolchain")
-source=("http://ftp.xtal.net/pub/mirrors/djgpp/current/v2/djcrx205.zip"
+source=("http://ftp.xtal.net/pub/mirrors/djgpp/current/v2/djcrx${pkgver//./}.zip"
         "patch-djcrx205.patch")
 sha256sums=('22274ed8d5ee57cf7ccf161f5e1684fd1c0192068724a7d34e1bde168041ca60'
             'c9c51c6008d0120b63197911582900c5d0496c169071b790e4a7084499fae05a')
@@ -32,19 +32,19 @@ prepare() {
 
 build() {
     cd ${srcdir}
-    make -f cross/makefile stub CFLAGS="$CFLAGS" -j$(($(nproc)+1))
+    make -f cross/makefile stub CFLAGS="$CFLAGS"
 }
 
 package() {
-    install -dm 0755 "${pkgdir}${MINGW_PREFIX}/${_target}"/sys-include
-    cp -r "${srcdir}/include"/* "${pkgdir}${MINGW_PREFIX}/${_target}"/sys-include/
-    cp -r "${srcdir}/lib"     "${pkgdir}${MINGW_PREFIX}/${_target}"
+    install -dm 0755 ${pkgdir}${MINGW_PREFIX}/${_target}/sys-include
+    cp -r "${srcdir}/include"/* ${pkgdir}${MINGW_PREFIX}/${_target}/sys-include/
+    cp -r "${srcdir}/lib"       ${pkgdir}${MINGW_PREFIX}/${_target}
 
     for _file in stubedit stubify; do
-        install -Dm 0755 "${srcdir}/${_file}" "${pkgdir}${MINGW_PREFIX}/bin/${_file}"
+        install -Dm 0755 ${srcdir}/${_file} ${pkgdir}${MINGW_PREFIX}/bin/${_file}
     done
 
     for file in copying copying.dj copying.lib readme.1st; do
-        install -Dm644 ${file} ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}"/${_realname}/${file}"
+        install -Dm644 ${file} ${pkgdir}${MINGW_PREFIX}/share/licenses/${_target}/${_realname}/${file}
     done
 }

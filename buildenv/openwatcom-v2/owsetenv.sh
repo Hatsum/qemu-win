@@ -2,7 +2,7 @@
 
 export WATCOM=/opt/watcom
 export EDPATH=$WATCOM/eddat
-export INCLUDE=$WATCOM/h:%WATCOM%/h/nt
+export INCLUDE=$WATCOM/h:$WATCOM/h/nt
 # export LIB=
   
 if [ "$MSYSTEM_CARCH" == "x86_64" ] ; then
