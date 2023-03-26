@@ -1,6 +1,5 @@
-WATCOM_PATH=/opt/watcom11/bin
-WCC=$(WATCOM_PATH)/wcc386
-WLD=$(WATCOM_PATH)/wlink
+WCC=wcc386
+WLD=wlink
 QEMU_SRC_DIR=..\..\..\qemu-0
 INCLUDES=-I$(QEMU_SRC_DIR)\hw\3dfx -I..\src
 CFLAGS=-zq -we -6s -ohtx -bd -fpi87
