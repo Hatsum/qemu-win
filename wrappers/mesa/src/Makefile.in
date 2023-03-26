@@ -20,7 +20,7 @@ C_OBJS:=\
     fxlibnt.o \
 
 
-all: fxlib $(TARGET) $(TOOLS)
+all: $(C_OBJS) $(TARGET) $(TOOLS)
 
 $(TARGET): $(C_OBJS) szdata.o wrapgl32.o stamp.o
 	@echo "  CFLAGS  $(CFLAGS)"
@@ -41,12 +41,10 @@ stamp.o:
 	@echo -n "  REV $@"; cat /tmp/$(@:o=c) | sed "s/.*rev_\[\]\ =//;s/;//"
 	@$(CC) -c -o $@ /tmp/$(@:o=c)
 
-fxlib:
+$(C_OBJS):
 	@if [ "$$MSYSTEM" != "MINGW32" ]; then echo "Error: MSYSTEM == $$MSYSTEM"; exit 1; fi
-	@echo "  CC  fxhook.o fxlib9x.o fxlibnt.o"
-	@$(CC) $(CFLAGS) -c -o fxhook.o $(FXLIB)/fxhook.c
-	@$(CC) $(CFLAGS) -c -o fxlib9x.o $(FXLIB)/fxlib9x.c
-	@$(CC) $(CFLAGS) -c -o fxlibnt.o $(FXLIB)/fxlibnt.c
+	@echo "  CC  $@"
+	@$(CC) $(CFLAGS) -c -o $@ $(FXLIB)/$(@:.o=.c)
 
 %.o: $(SRCDIR)/%.c
 	@echo "  CC  $@"

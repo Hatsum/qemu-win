@@ -1,22 +1,144 @@
+diff -r -U3 a/src/dxe/dxe3gen.c b/src/dxe/dxe3gen.c
+--- a/src/dxe/dxe3gen.c	2023-03-19 18:52:42.994513300 +0100
++++ b/src/dxe/dxe3gen.c	2023-03-26 19:49:55.535218700 +0200
+@@ -210,6 +210,13 @@
+ #define IS_VALID_CIE(id)        ((id) == 0)
+ #define IS_zR_AUGMENTATION(s)   (s[0] == 'z' && s[1] == 'R' && s[2] == '\0')
+ 
++#define TARGET      "i686-pc-msdosdjgpp"
++#if (defined __MSYS__ || defined __MINGW32__ || defined __MINGW64__)
++# define DXERES     "dxe3res.exe"
++#else
++# define DXERES     "dxe3res"
++#endif
++
+ 
+ typedef enum
+ {
+@@ -311,6 +318,7 @@
+ };
+ 
+ 
++static char *djdir;
+ static char *libdir;
+ /* build tools */
+ static char *dxe_cc; /* default: "gcc" */
+@@ -452,16 +460,14 @@
+ 
+   if ((e = getenv("DXE_LD_LIBRARY_PATH")))
+     libdir = strdup(e);
+-  else if ((e = getenv("DJDIR")))
++  else
+   {
+-    size_t sz = strlen(e) + 5U;
++    size_t sz = strlen(djdir) + 5U;
+     libdir = malloc(sz);
+-    strcpy(libdir, e);
++    strcpy(libdir, djdir);
+     strcat(libdir, "/lib");
+     canonicalize_path(libdir);
+   }
+-  else
+-    libdir = strdup("/usr/i686-pc-msdosdjgpp/lib");
+ }
+ 
+ 
+@@ -1366,12 +1372,11 @@
+   if (opt.autoresolve)
+   {
+     /* Fire the resolver. It should take care of the dependencies (if any) */
+-    const char *djdir = getenv("DJDIR");
+-    if (!djdir)
+-      djdir = "/usr/i686-pc-msdosdjgpp";
+     strcpy(cmdbuf, djdir);
+-    strcat(cmdbuf, "/bin/dxe3res -o "TEMP_BASE".c ");
++    strcat(cmdbuf, "/bin/"DXERES" -o "TEMP_BASE".c ");
+     strcat(cmdbuf, opt.dxefile);
++    if (opt.verbose)
++      printf("dxe3res cmd (1st call): '%s'\n", cmdbuf);
+     if ((rv = system(cmdbuf)) != 0)
+     {
+       if (rv == -1)
+@@ -1381,6 +1386,8 @@
+ 
+     /* Pre-compile the resolver's output. */
+     sprintf(cmdbuf, "%s -o %s -O2 -S %s.c", dxe_cc, TEMP_S_FILE, TEMP_BASE);
++    if (opt.verbose)
++      printf("dxe3res cmd (2nd call): '%s'\n", cmdbuf);
+     rv = system(cmdbuf);
+     remove(TEMP_BASE".c");
+     if (rv != 0)
+@@ -1555,6 +1562,24 @@
+   int rv;
+   const char **new_argv;
+ 
++  djdir = getenv("DJDIR");
++  if(!djdir) {
++#if (defined __MSYS__ || defined __MINGW32__ || defined __MINGW64__)
++    const char* usrRoot = getenv("MSYSTEM_PREFIX");
++    if(!usrRoot) {
++      fprintf(stderr, "No value for the environment variable `MSYSTEM_PREFIX`\n");
++    }
++#else
++    const char* usrRoot = "/usr";
++#endif
++    djdir = malloc(strlen(usrRoot) + strlen(TARGET) + 2U);
++    if(!djdir) {
++      fprintf(stderr, "Impossible to initialize `djdir`\n");
++    }
++    strcpy(djdir, usrRoot);
++    strcat(djdir, "/"TARGET);
++  }
++
+   progname = argv[0];
+   /* Prepare the command line for ld */
+   new_argv = (const char **)malloc((argc - 1 + NUMBER_OF_LINKER_ARGS + NUMBER_OF_ADDITIONAL_LOADED_LIBS + 2 + 1) * sizeof(char *));
+diff -r -U3 a/src/dxe/dxegen.c b/src/dxe/dxegen.c
+--- a/src/dxe/dxegen.c	2023-03-19 18:52:42.986536800 +0100
++++ b/src/dxe/dxegen.c	2023-03-19 14:36:29.946568600 +0100
+@@ -11,6 +11,14 @@
+ #include "../../include/coff.h"
+ #include "../../include/sys/dxe.h"
+ 
++#if defined(__MSYS__) && defined(_WIN32)
++# define DJ_DIR      "/mingw32/i686-pc-msdosdjgpp"
++#elif defined(__MSYS__) && defined(_WIN64)
++# define DJ_DIR      "/mingw64/i686-pc-msdosdjgpp"
++#else
++# define DJ_DIR      "/usr/i686-pc-msdosdjgpp"
++#endif
++
+ /* This next function is needed for cross-compiling when the machine
+    isn't little-endian like the i386 */
+ 
+@@ -106,7 +114,7 @@
+       libdir = getenv("DJDIR");
+       if (!libdir)
+       {
+-        libdir = "/usr/i686-pc-msdosdjgpp";
++        libdir = DJ_DIR;
+       }
+       strcat(command, libdir);
+       strcat(command, "/lib");
 diff -r -U3 a/src/libm/math/makefile b/src/libm/math/makefile
---- a/src/libm/math/makefile    2023-03-18 23:27:40.332024000 +0100
-+++ b/src/libm/math/makefile    2023-03-18 23:38:50.490639300 +0100
+--- a/src/libm/math/makefile	2023-03-19 18:52:43.055402800 +0100
++++ b/src/libm/math/makefile	2023-03-19 00:06:05.602168500 +0100
 @@ -206,7 +206,7 @@
  CFLAGS = -D_USE_LIBM_MATH_H
  EXTRA_FILES = $(TOP)/../../info/libm.info
  # chew emits non-fatal warnings, so we redirect them to the void
 -CHEW = ./chew.exe -f ./doc.str -e /dev/null
 +CHEW = ./chew.exe -f ./doc.str -e chew_error.log
-
+ 
  # Common rules and targets
  include $(TOP)/../makefile.inc
 diff -r -U3 a/src/makefile.def b/src/makefile.def
---- a/src/makefile.def  2023-03-18 23:41:59.280966600 +0100
-+++ b/src/makefile.def  2023-03-19 00:02:34.475349400 +0100
+--- a/src/makefile.def	2023-03-19 18:52:42.364530300 +0100
++++ b/src/makefile.def	2023-03-19 00:06:05.613168000 +0100
 @@ -3,7 +3,9 @@
-
+ 
  #  These define the cross-to-djgpp and native programs.
-
+ 
 -ifneq ($(COMSPEC),)
 +ifeq ($(findstring MINGW,$(MSYSTEM)),MINGW)
 +CROSS_BUILD = 1
@@ -25,11 +147,11 @@ diff -r -U3 a/src/makefile.def b/src/makefile.def
  else
  CROSS_BUILD = 1
 diff -r -U3 a/src/makemake.c b/src/makemake.c
---- a/src/makemake.c    2015-05-11 06:48:38.000000000 +0200
-+++ b/src/makemake.c    2023-03-18 23:35:53.554445900 +0100
+--- a/src/makemake.c	2015-05-11 06:48:38.000000000 +0200
++++ b/src/makemake.c	2023-03-19 00:06:05.626168300 +0100
 @@ -195,11 +195,11 @@
      printf("makemake: scanning %s for makefiles\n", notepwd);
-
+ 
    if (!do_oh_files)
 -    mf = fopen("makefile.sub", "w");
 +    mf = fopen("makefile.sub", "wb");
@@ -40,15 +162,15 @@ diff -r -U3 a/src/makemake.c b/src/makemake.c
 +    oi = fopen("makefile.oi", "wb");
 +    rf = fopen("makefile.rf2", "wb");
    }
-
+ 
    if (!do_oh_files)
 diff -r -U3 a/src/misc.c b/src/misc.c
---- a/src/misc.c        2015-05-02 06:31:59.000000000 +0200
-+++ b/src/misc.c        2023-03-18 23:38:00.130150300 +0100
+--- a/src/misc.c	2015-05-02 06:31:59.000000000 +0200
++++ b/src/misc.c	2023-03-19 00:06:05.639170300 +0100
 @@ -6,6 +6,11 @@
  #include <sys/stat.h>
  #include <unistd.h>
-
+ 
 +#if (defined(_WIN32) || defined(__WIN32__))
 +#include <direct.h> /* _mkdir */
 +#define mkdir(x, y) _mkdir(x)
@@ -56,7 +178,7 @@ diff -r -U3 a/src/misc.c b/src/misc.c
 +
  /* Miscellaneous things that are hard to do the same
     between Unix and MS-DOS */
-
+ 
 @@ -26,7 +31,7 @@
        f = stdout;
      else
@@ -65,4 +187,4 @@ diff -r -U3 a/src/misc.c b/src/misc.c
 +      f = fopen(argv[2], "wb");
        if (f == 0)
        {
-        perror(argv[2]);
+ 	perror(argv[2]);

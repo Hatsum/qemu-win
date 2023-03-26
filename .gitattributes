@@ -14,3 +14,4 @@
 *.diff text eol=lf
 *.patch text eol=lf
 PKGBUILD text eol=lf
+wrappers/3dfx/drv/shasum.txt text eol=lf

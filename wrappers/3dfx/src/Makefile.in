@@ -6,7 +6,7 @@ CC=$(CROSS)gcc
 RC=windres
 DLLTOOL=dlltool
 STRIP=strip
-CFLAGS=-march=x86-64-v2 -mtune=generic -O3
+CFLAGS=-march=x86-64-v2 -mtune=generic -O3 -fno-lto
 CFLAGS+=-pipe -I$(QEMU_SRC_DIR)/hw/3dfx -I$(FXLIB) -D__REV__=\"$(GIT)\" -Wall -Werror -flto=auto -fomit-frame-pointer
 LDFLAGS=-static-libgcc
 LDFLAGS+=-Wl,--disable-auto-image-base,--no-seh,--dynamicbase,--nxcompat
@@ -18,12 +18,12 @@ GENDEF=gendef
 OUTDIR=$(shell basename `pwd`)
 
 C_OBJS:=\
-    fxhook.o \
-    fxlib9x.o \
-    fxlibnt.o \
+	fxhook.o \
+	fxlib9x.o \
+	fxlibnt.o \
 
 
-all: fxlib $(TARGET1) $(TARGET2) $(TARGET3) fxdrv
+all: $(C_OBJS) $(TARGET1) $(TARGET2) $(TARGET3) fxdrv
 
 fxdrv:
 	@make -C ../dxe OUTDIR=$(OUTDIR)
@@ -36,12 +36,12 @@ $(TARGET2): $(C_OBJS) glidedll.o
 	@echo "  RC  $(@:.dll=_res.o)"
 	@$(RC) -Jrc -Ocoff -DGLIDE2 -o $(@:.dll=_res.o) ../src/version.rc
 	@$(CC) -shared $(CFLAGS) -o $@ $+ $(LDFLAGS)
-	@$(GENDEF) - $@ | sed "s/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/" | \
-		sed "s/\ ;\ Check!!!.*//" | \
+	@$(GENDEF) - $@ | sed 's/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/' | \
+		sed 's/\ ;\ Check!!!.*//' | \
 		grep -e ^LIB -e ^EXP -e "\ =\ " > $(@:.dll=.def)
 	@echo "  LD  $@"
 	@$(CC) -shared $(CFLAGS) -o $@ $(@:dll=def) $(@:.dll=_res.o) $+ $(LDFLAGS)
-	@$(GENDEF) - $@ | sed "s/\(@[0-9]*\)@.*/\1/;s/^_//" > lib$(@:dll=def)
+	@$(GENDEF) - $@ | sed 's/\(@[0-9]*\)@.*/\1/;s/^_//' > lib$(@:dll=def)
 	@$(DLLTOOL) -U -d lib$(@:dll=def) -l lib$@.a
 
 $(TARGET1): $(C_OBJS) gl211dll.o
@@ -50,8 +50,8 @@ $(TARGET1): $(C_OBJS) gl211dll.o
 	@echo "  RC  $(@:.dll=_res.o)"
 	@$(RC) -Jrc -Ocoff -DGLIDE1 -o $(@:.dll=_res.o) ../src/version.rc
 	@$(CC) -shared $(CFLAGS) -o $@ $+ $(LDFLAGS)
-	@$(GENDEF) - $@ | sed "s/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/" | \
-		sed "s/\ ;\ Check!!!.*//" | \
+	@$(GENDEF) - $@ | sed 's/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/' | \
+		sed 's/\ ;\ Check!!!.*//' | \
 		grep -e ^LIB -e ^EXP -e "\ =\ " > $(@:.dll=.def)
 	@echo "  LD  $@"
 	@$(CC) -shared $(CFLAGS) -o $@ $(@:dll=def) $(@:.dll=_res.o) $+ $(LDFLAGS)
@@ -62,20 +62,18 @@ $(TARGET3): $(C_OBJS) gl301dll.o
 	@echo "  RC  $(@:.dll=_res.o)"
 	@$(RC) -Jrc -Ocoff -DGLIDE3 -o $(@:.dll=_res.o) ../src/version.rc
 	@$(CC) -shared $(CFLAGS) -o $@ $+ $(LDFLAGS)
-	@$(GENDEF) - $@ | sed "s/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/" | \
-		sed "s/\ ;\ Check!!!.*//" | \
+	@$(GENDEF) - $@ | sed 's/\(@[0-9]*\)@.*/\1/;s/\(^.*@[0-9]*\)/_\1\ =\ \1/' | \
+		sed 's/\ ;\ Check!!!.*//' | \
 		grep -e ^LIB -e ^EXP -e "\ =\ " > $(@:.dll=.def)
 	@echo "  LD  $@"
 	@$(CC) -shared $(CFLAGS) -o $@ $(@:dll=def) $(@:.dll=_res.o) $+ $(LDFLAGS)
-	@$(GENDEF) - $@ | sed "s/\(@[0-9]*\)@.*/\1/;s/^_//" > lib$(@:dll=def)
+	@$(GENDEF) - $@ | sed 's/\(@[0-9]*\)@.*/\1/;s/^_//' > lib$(@:dll=def)
 	@$(DLLTOOL) -U -d lib$(@:dll=def) -l lib$@.a
 
-fxlib:
+$(C_OBJS):
 	@if [ "$$MSYSTEM" != "MINGW32" ]; then echo "Error: MSYSTEM == $$MSYSTEM"; exit 1; fi
-	@echo "  CC  fxhook.o fxlib9x.o fxlibnt.o"
-	@$(CC) $(CFLAGS) -c -o fxhook.o $(FXLIB)/fxhook.c
-	@$(CC) $(CFLAGS) -c -o fxlib9x.o $(FXLIB)/fxlib9x.c
-	@$(CC) $(CFLAGS) -c -o fxlibnt.o $(FXLIB)/fxlibnt.c
+	@echo "  CC  $@"
+	@$(CC) $(CFLAGS) -c -o $@ $(FXLIB)/$(@:.o=.c)
 
 %.o: $(SRCDIR)/%.c
 	@echo "  CC  $@"

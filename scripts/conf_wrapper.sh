@@ -83,10 +83,14 @@ fi
 if [ -z $(which wcc386 2>/dev/null) ]; then
     echo -- DOS32 OVL not supported --
     sed -i -e "/.*make\ \-C\ .*ovl/d" $MKFILE
+else
+    echo -- DOS32 OVL supported --
 fi
 if [ -z $(which i686-pc-msdosdjgpp-gcc 2>/dev/null) ]; then
     echo -- DJGPP DXE not supported --
     sed -i -e "/.*make\ \-C\ .*dxe/d" $MKFILE
+else
+    echo -- DOS32 DXE supported --
 fi
 echo "conf_wrapper: creating $MKFILE"
 
