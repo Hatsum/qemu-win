@@ -354,11 +354,12 @@ void PT_CALL grBufferSwap(uint32_t arg0) {
     ret = *pt0;
     if (ret) {
         static uint32_t nexttick;
-        uint32_t t = GetTickCount();
-        nexttick = (nexttick == 0)? t:nexttick;
-        nexttick += 1000/ret;
         while (GetTickCount() < nexttick)
             Sleep(0);
+        nexttick = GetTickCount();
+        while (nexttick >= (UINT32_MAX - (1000 / ret)))
+            nexttick = GetTickCount();
+        nexttick += (1000 / ret);
     }
 }
 void PT_CALL grCheckForRoom(uint32_t arg0) {
@@ -1055,8 +1056,13 @@ BOOL APIENTRY DllMain( HINSTANCE hModule,
     DRVFUNC drv;
     osInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
     GetVersionEx(&osInfo);
-    if (osInfo.dwPlatformId == VER_PLATFORM_WIN32_NT)
+    if (osInfo.dwPlatformId == VER_PLATFORM_WIN32_NT) {
+        DWORD affinityMask[2];
+        GetProcessAffinityMask(GetCurrentProcess(), &affinityMask[0], &affinityMask[1]);
+        SetThreadAffinityMask(GetCurrentThread(), (1 << ((GetCurrentThreadId() >> 2) &
+                        ((sizeof(DWORD) << 3) - __builtin_clz(affinityMask[0]) - 1))));
         kmdDrvInit(&drv);
+    }
     else
         vxdDrvInit(&drv);
 

@@ -16,8 +16,10 @@ GENDEF=gendef
 
 C_OBJS:=\
     fxhook.o \
+    fxhpat.o \
     fxlib9x.o \
     fxlibnt.o \
+    md5.o \
 
 
 all: $(C_OBJS) $(TARGET) $(TOOLS)

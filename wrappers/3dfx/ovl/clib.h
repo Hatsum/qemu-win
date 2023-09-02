@@ -1,6 +1,9 @@
 #ifndef CLIB_H
 #define CLIB_H
 
+#ifndef UINT32_MAX
+#define UINT32_MAX 0xffffffffU
+#endif
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned uint32_t;
@@ -15,6 +18,26 @@ void _dxe_putc(int c)
         mov eax, c;
         out dx, al;
     }
+}
+
+static unsigned getTickAcpi(void)
+{
+    static unsigned tick;
+    unsigned tickAcpi;
+
+    __asm
+    {
+        mov dx, 0x608;
+        in eax, dx;
+        mov tickAcpi, eax;
+    }
+
+    if ((tick & 0x00FFFFFFU) > tickAcpi)
+        tick = (((tick >> 24) + 1) << 24) | tickAcpi;
+    else
+        tick = (tick & 0xFF000000U) | tickAcpi;
+#define TICK_ACPI 0x369E99U /* 3.579545 MHz */
+    return tick;
 }
 
 static unsigned getDosPSPSeg(void)

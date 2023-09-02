@@ -143,6 +143,7 @@ static int wnd_ready, GLon12;
 
 static struct {
     HGLRC (WINAPI *CreateContext)(HDC);
+    HGLRC (WINAPI *GetCurrentContext)(VOID);
     BOOL  (WINAPI *MakeCurrent)(HDC, HGLRC);
     BOOL  (WINAPI *DeleteContext)(HGLRC);
     BOOL  (WINAPI *UseFontBitmapsA)(HDC, DWORD, DWORD, DWORD);
@@ -178,76 +179,6 @@ static void MesaInitGammaRamp(void)
     SetDeviceGammaRamp(hDC, &GammaRamp);
 }
 
-static void MesaDisplayModeset(const int modeset)
-{
-    switch(modeset) {
-        case 1:
-            do {
-                int w, h, fullscreen = mesa_gui_fullscreen(&w, &h), scale_x = GetGLScaleWidth();
-                DEVMODE DevMode;
-                memset(&DevMode, 0, sizeof(DEVMODE));
-                DevMode.dmSize = sizeof(DEVMODE);
-                if (scale_x) {
-                    h = ((1.f * h) / w) * scale_x;
-                    w = scale_x;
-                }
-
-                if (fullscreen && EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &DevMode)) {
-                    DWORD vidBpp = DevMode.dmBitsPerPel, vidRef = DevMode.dmDisplayFrequency;
-                    DPRINTF_COND(GLFuncTrace(), "Current %4lux%lu %lubpp %luHz",
-                        DevMode.dmPelsWidth, DevMode.dmPelsHeight,
-                        DevMode.dmBitsPerPel, DevMode.dmDisplayFrequency);
-                    if ((DevMode.dmPelsWidth == w) && (DevMode.dmPelsHeight == h)) { }
-                    else {
-                        for (int i = 0; EnumDisplaySettings(NULL, i, &DevMode); i++) {
-                            DPRINTF_COND(GLFuncTrace(), "  Mode 0x%02x %4lu %4lu %2lubpp %3luHz", i,
-                                DevMode.dmPelsWidth, DevMode.dmPelsHeight,
-                                DevMode.dmBitsPerPel, DevMode.dmDisplayFrequency);
-                            if ((DevMode.dmPelsWidth == w) && (DevMode.dmPelsHeight == h) &&
-                                (DevMode.dmBitsPerPel == vidBpp)) {
-                                DevMode.dmDisplayFrequency = vidRef;
-                                DevMode.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL;
-                                LONG ret = ChangeDisplaySettings(&DevMode, 0);
-                                Sleep(1000 / DevMode.dmDisplayFrequency);
-                                DPRINTF("Modeset 0x%02x Fullscreen %4lux%lu %lubpp %luHz ret %d", i,
-                                    DevMode.dmPelsWidth, DevMode.dmPelsHeight,
-                                    DevMode.dmBitsPerPel, DevMode.dmDisplayFrequency,
-                                    (ret == DISP_CHANGE_SUCCESSFUL)? 1:0);
-                                break;
-                            }
-                        }
-                    }
-                }
-            } while(0);
-            break;
-        case 0:
-            do {
-                int w, h, fullscreen = mesa_gui_fullscreen(&w, &h);
-                DEVMODE DevMode;
-                memset(&DevMode, 0, sizeof(DEVMODE));
-                DevMode.dmSize = sizeof(DEVMODE);
-                DevMode.dmPelsWidth = w; DevMode.dmPelsHeight = h;
-                DevMode.dmDisplayFrequency = GetDeviceCaps(hDC, VREFRESH);
-
-                if (fullscreen && (ChangeDisplaySettings(NULL, 0) == DISP_CHANGE_SUCCESSFUL)) {
-                    Sleep(1000 / DevMode.dmDisplayFrequency);
-                    int ret = 1;
-                    while ((ret < (1000 / DevMode.dmDisplayFrequency)) &&
-                            EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &DevMode) &&
-                            (DevMode.dmPelsWidth == w) && (DevMode.dmPelsHeight == h)) {
-                        ret++;
-                        Sleep(1000 / DevMode.dmDisplayFrequency);
-                    }
-                    DPRINTF("Restore mode %4lux%lu %lubpp %luHz ret %d", DevMode.dmPelsWidth, DevMode.dmPelsHeight,
-                        DevMode.dmBitsPerPel, DevMode.dmDisplayFrequency, ret);
-                }
-            } while(0);
-            break;
-        default:
-            break;
-    }
-}
-
 static void cwnd_mesagl(void *swnd, void *nwnd, void *opaque)
 {
     ReleaseDC(hwnd, hDC);
@@ -271,6 +202,7 @@ void SetMesaFuncPtr(void *p)
 {
     HINSTANCE hDLL = (HINSTANCE)p;
     wglFuncs.GetProcAddress = (PROC (WINAPI *)(LPCSTR))GetProcAddress(hDLL, "wglGetProcAddress");
+    wglFuncs.GetCurrentContext = (HGLRC (WINAPI *)(VOID))GetProcAddress(hDLL, "wglGetCurrentContext");
     wglFuncs.CreateContext = (HGLRC (WINAPI *)(HDC))GetProcAddress(hDLL, "wglCreateContext");
     wglFuncs.MakeCurrent   = (BOOL (WINAPI *)(HDC, HGLRC))GetProcAddress(hDLL, "wglMakeCurrent");
     wglFuncs.DeleteContext = (BOOL (WINAPI *)(HGLRC))GetProcAddress(hDLL, "wglDeleteContext");
@@ -333,8 +265,7 @@ void MGLTmpContext(void)
     CreateMesaWindow("MesaGL", 640, 480, 1); \
     wnd_ready = 0; \
     ImplMesaGLReset(); \
-    DPRINTF_COND(GetGLScaleWidth(), "MESAGL window scaled at width %d", GetGLScaleWidth()); \
-    mesa_prepare_window(GetContextMSAA(), GLon12, GetGLScaleWidth(), &cwnd_mesagl); hDC = GetDC(hwnd); }
+    mesa_prepare_window(GetContextMSAA(), GLon12, 0, &cwnd_mesagl); hDC = GetDC(hwnd); }
 
 #define GLWINDOW_FINI() \
     if (0) { } \
@@ -342,7 +273,7 @@ void MGLTmpContext(void)
 
 void MGLDeleteContext(int level)
 {
-    int n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
     wglFuncs.MakeCurrent(NULL, NULL);
     if (n == 0) {
         for (int i = MAX_LVLCNTX; i > 1;) {
@@ -351,6 +282,7 @@ void MGLDeleteContext(int level)
                 hRC[i] = 0;
             }
         }
+        MesaBlitFree();
     }
     wglFuncs.DeleteContext(hRC[n]);
     hRC[n] = 0;
@@ -361,7 +293,6 @@ void MGLDeleteContext(int level)
 void MGLWndRelease(void)
 {
     if (hwnd) {
-        MesaDisplayModeset(0);
         MesaInitGammaRamp();
         ReleaseDC(hwnd, hDC);
         TmpContextPurge();
@@ -395,7 +326,8 @@ int MGLCreateContext(uint32_t gDC)
 
 int MGLMakeCurrent(uint32_t cntxRC, int level)
 {
-    uint32_t i = cntxRC & (MAX_PBUFFER - 1), n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
+    uint32_t i = cntxRC & (MAX_PBUFFER - 1);
     if (cntxRC == (MESAGL_MAGIC - n)) {
         wglFuncs.MakeCurrent(hDC, hRC[n]);
         InitMesaGLExt();
@@ -417,6 +349,7 @@ int MGLMakeCurrent(uint32_t cntxRC, int level)
 int MGLSwapBuffers(void)
 {
     MGLActivateHandler(1, 0);
+    MesaBlitScale();
     return SwapBuffers(hDC);
 }
 
@@ -530,29 +463,17 @@ int MGLDescribePixelFormat(int fmt, unsigned int sz, void *p)
     return curr;
 }
 
-void MGLActivateHandler(const int i, const int d)
-{
-    static int last;
-
-    if (i != last) {
-        last = i;
-        DPRINTF_COND(GLFuncTrace(), "wm_activate %-32d", i);
-        if (i) {
-            deactivateCancel();
-            MesaDisplayModeset(i);
-            mesa_renderer_stat(i);
-        }
-        else
-            deactivateSched(d);
-    }
-}
-
 int NumPbuffer(void)
 {
     int i, c;
     for (i = 0, c = 0; i < MAX_PBUFFER;)
         if (hPbuffer[i++]) c++;
     return c;
+}
+
+int DrawableContext(void)
+{
+    return (hRC[0] == wglFuncs.GetCurrentContext());
 }
 
 static int LookupAttribArray(const int *attrib, const int attr)
@@ -570,7 +491,7 @@ static int LookupAttribArray(const int *attrib, const int attr)
 void MGLFuncHandler(const char *name)
 {
     char fname[64];
-    uint32_t *argsp = (uint32_t *)(name + ALIGNED(strnlen(name, sizeof(fname))));
+    uint32_t *argsp = (uint32_t *)(name + ALIGNED((strnlen(name, sizeof(fname))+1)));
     strncpy(fname, name, sizeof(fname)-1);
 
 #define FUNCP_HANDLER(a) \
@@ -628,9 +549,8 @@ void MGLFuncHandler(const char *name)
                 "WGL_ARB_create_context_profile "
                 "WGL_ARB_extensions_string "
                 "WGL_ARB_multisample "
-                "WGL_ARB_pbuffer "
                 "WGL_ARB_pixel_format "
-                "WGL_ARB_render_texture "
+                "WGL_ARB_pbuffer WGL_ARB_render_texture "
                 "WGL_EXT_extensions_string "
                 "WGL_EXT_swap_control "
                 ;
@@ -705,7 +625,7 @@ void MGLFuncHandler(const char *name)
                 argsp[1] = (nNumFormats)? piFormats[0]:0;
             }
             else {
-                DPRINTF("wglChoosePixelFormatARB()");
+                DPRINTF("%-32s", "wglChoosePixelFormatARB()");
                 argsp[1] = MGLChoosePixelFormat();
             }
             argsp[0] = 1;
@@ -752,9 +672,9 @@ void MGLFuncHandler(const char *name)
             (HDC (__stdcall *)(HPBUFFERARB)) MesaGLGetProc("wglGetPbufferDCARB");
         if (fp && fpDC) {
             uint32_t i;
-            i = 0; while(hPbuffer[i]) i++;
-            if (i == MAX_PBUFFER) {
-                DPRINTF("MAX_PBUFFER reached %d", i);
+            for (i = 0; ((i < MAX_PBUFFER) && hPbuffer[i]); i++);
+            if (MAX_PBUFFER == i) {
+                DPRINTF("MAX_PBUFFER reached %-24u", i);
                 argsp[0] = 0;
                 return;
             }
@@ -814,6 +734,22 @@ void MGLFuncHandler(const char *name)
 
 #endif //CONFIG_WIN32
 
+void MGLActivateHandler(const int i, const int d)
+{
+    static int last;
+
+    if (i != last) {
+        last = i;
+        DPRINTF_COND(GLFuncTrace(), "wm_activate %-32d", i);
+        if (i) {
+            deactivateGuiRefSched();
+            mesa_renderer_stat(i);
+        }
+        else
+            deactivateSched(d);
+    }
+}
+
 void MGLCursorDefine(int hot_x, int hot_y, int width, int height,
                         const void *data)
 {
@@ -854,12 +790,23 @@ void deactivateCancel(void)
 void deactivateSched(const int deferred)
 {
     if (!deferred)
-        deactivateOnce();
+        deactivateOneshot(0);
     else {
-        if (!ts)
-            ts = timer_new_ms(QEMU_CLOCK_VIRTUAL, deactivateOneshot, 0);
+        deactivateCancel();
+        ts = timer_new_ms(QEMU_CLOCK_VIRTUAL, deactivateOneshot, 0);
         timer_mod(ts, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + GetDispTimerMS());
     }
+}
+static void deactivateGuiRefOneshot(void *opaque)
+{
+    deactivateCancel();
+    graphic_hw_halt(0x81U);
+}
+void deactivateGuiRefSched(void)
+{
+    deactivateCancel();
+    ts = timer_new_ms(QEMU_CLOCK_VIRTUAL, deactivateGuiRefOneshot, 0);
+    timer_mod(ts, qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + GUI_REFRESH_INTERVAL_DEFAULT);
 }
 
 int find_xstr(const char *xstr, const char *str)
@@ -927,7 +874,7 @@ static void profile_stat(void)
     if (p->last == 0) {
 	p->fcount = 0;
 	p->ftime = 0;
-	p->last = (mesa_gui_fullscreen(0, 0))? 0:get_clock();
+	p->last = (mesa_gui_fullscreen(0))? 0:get_clock();
 	return;
     }
 

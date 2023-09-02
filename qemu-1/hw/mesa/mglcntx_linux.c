@@ -139,10 +139,22 @@ typedef struct tagPIXELFORMATDESCRIPTOR {
 #define WGL_TYPE_COLORINDEX_ARB                 0x202C
 #define WGL_SAMPLE_BUFFERS_ARB                  0x2041
 #define WGL_SAMPLES_ARB                         0x2042
+/*
+ * WGL_ARB_render_texture
+ * WGL_NV_render_texture_rectangle
+*/
+#define WGL_TEXTURE_FORMAT_ARB                  0x2072
+#define WGL_TEXTURE_RGB_ARB                     0x2075
+#define WGL_TEXTURE_RGBA_ARB                    0x2076
+#define WGL_TEXTURE_TARGET_ARB                  0x2073
+#define WGL_TEXTURE_2D_ARB                      0x207A
+#define WGL_TEXTURE_RECTANGLE_NV                0x20A2
+#define WGL_MIPMAP_LEVEL_ARB                    0x207B
 
 typedef struct tagFakePBuffer {
     int width;
     int height;
+    int target, format, level;
 } HPBUFFERARB;
 
 static const PIXELFORMATDESCRIPTOR pfd = {
@@ -228,13 +240,13 @@ static XVisualInfo *xvi;
 static int          xvidmode;
 static const char  *xstr, *xcstr;
 static GLXContext   ctx[MAX_LVLCNTX];
-
-static HPBUFFERARB hPbuffer[MAX_PBUFFER];
 static GLXPbuffer PBDC[MAX_PBUFFER];
 static GLXContext PBRC[MAX_PBUFFER];
+
+static HPBUFFERARB hPbuffer[MAX_PBUFFER];
 static int wnd_ready;
-static int cDepthBits, cStencilBits, cAuxBuffers;
-static int cSampleBuf[2];
+static int cAlphaBits, cDepthBits, cStencilBits;
+static int cAuxBuffers, cSampleBuf[2];
 
 static struct {
     int (*SwapIntervalEXT)(unsigned int);
@@ -295,76 +307,6 @@ static void MesaInitGammaRamp(void)
         GammaRamp.r, GammaRamp.g, GammaRamp.b);
 }
 
-static void MesaDisplayModeset(const int modeset)
-{
-    static XF86VidModeModeInfo vidInfo;
-
-    switch(modeset) {
-        case 1:
-            do {
-                int w, h, fullscreen = mesa_gui_fullscreen(&w, &h), scale_x = GetGLScaleWidth(), modeset = 0, vidCount;
-                XF86VidModeModeInfo **vidModes;
-                if (scale_x) {
-                    h = ((1.f * h) / w) * scale_x;
-                    w = scale_x;
-                }
-                if (fullscreen && xvidmode && XF86VidModeGetAllModeLines(dpy, DefaultScreen(dpy), &vidCount, &vidModes)) {
-                    int vidRef = (1000.f * vidModes[0]->dotclock) / (vidModes[0]->htotal * vidModes[0]->vtotal);
-                    DPRINTF_COND(GLFuncTrace(), "Current %4dx%d %3dHz dotclock %6d",
-                        vidModes[0]->hdisplay, vidModes[0]->vdisplay, vidRef, vidModes[0]->dotclock);
-                    if ((vidModes[0]->hdisplay == w) && (vidModes[0]->vdisplay == h)) { }
-                    else {
-                        if (vidInfo.dotclock == 0)
-                            memcpy(&vidInfo, vidModes[0], sizeof(XF86VidModeModeInfo));
-                        for (int i = 0; i < vidCount; i++) {
-                            int modeRef = (1000.f * vidModes[i]->dotclock) / (vidModes[i]->htotal * vidModes[i]->vtotal);
-                            DPRINTF_COND(GLFuncTrace(), "  Mode 0x%02x %4d %4d %3dHz dotclock %6d", i,
-                                vidModes[i]->hdisplay, vidModes[i]->vdisplay, modeRef, vidModes[i]->dotclock);
-                            if ((vidModes[i]->hdisplay == w) && (vidModes[i]->vdisplay == h) &&
-                                ((modeRef <= vidRef) || ((modeRef - vidRef) == 1))) {
-                                if (XF86VidModeSwitchToMode(dpy, DefaultScreen(dpy), vidModes[i])) {
-                                    usleep((1000 * 1000) / vidRef);
-                                    modeset = XF86VidModeSetViewPort(dpy, DefaultScreen(dpy), 0, 0);
-                                }
-                                DPRINTF("Modeset 0x%02x Fullscreen %4dx%d %3dHz ret %d", i,
-                                    vidModes[i]->hdisplay, vidModes[i]->vdisplay, modeRef, (modeset)? 1:0);
-                                break;
-                            }
-                        }
-                        if (!modeset)
-                            memset(&vidInfo, 0, sizeof(XF86VidModeModeInfo));
-                    }
-                    XFree(vidModes);
-                }
-            } while(0);
-            break;
-        case 0:
-            do {
-                int w, h, fullscreen = mesa_gui_fullscreen(&w, &h);
-                XF86VidModeModeInfo **vidModes;
-                if (fullscreen && vidInfo.dotclock &&
-                    XF86VidModeSwitchToMode(dpy, DefaultScreen(dpy), &vidInfo)) {
-                    int ret = 0, vidRef = (1000.f * vidInfo.dotclock) / (vidInfo.htotal * vidInfo.vtotal), vidCount;
-                    usleep((1000 * 1000) / vidRef);
-                    while ((ret < (1000 / vidRef)) && XF86VidModeGetAllModeLines(dpy, DefaultScreen(dpy), &vidCount, &vidModes)) {
-                        memcpy(&vidInfo, vidModes[0], sizeof(XF86VidModeModeInfo));
-                        XFree(vidModes);
-                        ret++;
-                        if ((vidInfo.hdisplay == w) && (vidInfo.vdisplay == h))
-                            usleep((1000 * 1000) / vidRef);
-                        else
-                            break;
-                    }
-                    DPRINTF("Restore mode %4dx%d %3dHz ret %d", vidInfo.hdisplay, vidInfo.vdisplay, vidRef, ret);
-                    memset(&vidInfo, 0, sizeof(XF86VidModeModeInfo));
-                }
-            } while(0);
-            break;
-        default:
-            break;
-    }
-}
-
 static void cwnd_mesagl(void *swnd, void *nwnd, void *opaque)
 {
     win = (Window)nwnd;
@@ -401,7 +343,7 @@ void MGLTmpContext(void)
 
 void MGLDeleteContext(int level)
 {
-    int n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
     glXMakeContextCurrent(dpy, None, None, NULL);
     if (n == 0) {
         for (int i = MAX_LVLCNTX; i > 1;) {
@@ -410,6 +352,7 @@ void MGLDeleteContext(int level)
                 ctx[i] = 0;
             }
         }
+        MesaBlitFree();
     }
     glXDestroyContext(dpy, ctx[n]);
     ctx[n] = 0;
@@ -420,7 +363,6 @@ void MGLDeleteContext(int level)
 void MGLWndRelease(void)
 {
     if (win) {
-        MesaDisplayModeset(0);
         MesaInitGammaRamp();
         XFree(xvi);
         XCloseDisplay(dpy);
@@ -454,7 +396,8 @@ int MGLCreateContext(uint32_t gDC)
 
 int MGLMakeCurrent(uint32_t cntxRC, int level)
 {
-    uint32_t i = cntxRC & (MAX_PBUFFER - 1), n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
+    uint32_t i = cntxRC & (MAX_PBUFFER - 1);
     if (cntxRC == (MESAGL_MAGIC - n)) {
         glXMakeContextCurrent(dpy, win, win, ctx[n]);
         InitMesaGLExt();
@@ -482,6 +425,7 @@ int MGLMakeCurrent(uint32_t cntxRC, int level)
 int MGLSwapBuffers(void)
 {
     MGLActivateHandler(1, 0);
+    MesaBlitScale();
     glXSwapBuffers(dpy, win);
     return 1;
 }
@@ -492,8 +436,7 @@ static int MGLPresetPixelFormat(void)
     dpy = XOpenDisplay(NULL);
     wnd_ready = 0;
     ImplMesaGLReset();
-    DPRINTF_COND(GetGLScaleWidth(), "MESAGL window scaled at width %d", GetGLScaleWidth());
-    mesa_prepare_window(GetContextMSAA(), memcmp(xcstr, nvstr, sizeof(nvstr) - 1), GetGLScaleWidth(), &cwnd_mesagl);
+    mesa_prepare_window(GetContextMSAA(), memcmp(xcstr, nvstr, sizeof(nvstr) - 1), 0, &cwnd_mesagl);
 
     int fbid, fbcnt, *attrib = iattribs_fb(dpy, GetContextMSAA());
     GLXFBConfig *fbcnf = glXChooseFBConfig(dpy, DefaultScreen(dpy), attrib, &fbcnt);
@@ -503,6 +446,7 @@ static int MGLPresetPixelFormat(void)
     }
     xvi = glXGetVisualFromFBConfig(dpy, fbcnf[0]);
     glXGetFBConfigAttrib(dpy, fbcnf[0], GLX_FBCONFIG_ID, &fbid);
+    glXGetFBConfigAttrib(dpy, fbcnf[0], GLX_ALPHA_SIZE, &cAlphaBits);
     glXGetFBConfigAttrib(dpy, fbcnf[0], GLX_DEPTH_SIZE, &cDepthBits);
     glXGetFBConfigAttrib(dpy, fbcnf[0], GLX_STENCIL_SIZE, &cStencilBits);
     glXGetFBConfigAttrib(dpy, fbcnf[0], GLX_AUX_BUFFERS, &cAuxBuffers);
@@ -547,25 +491,6 @@ int MGLDescribePixelFormat(int fmt, unsigned int sz, void *p)
     return 1;
 }
 
-void MGLActivateHandler(const int i, const int d)
-{
-    static int last;
-
-#define WA_ACTIVE 1
-#define WA_INACTIVE 0
-    if (i != last) {
-        last = i;
-        DPRINTF_COND(GLFuncTrace(), "wm_activate %-32d", i);
-        if (i) {
-            deactivateCancel();
-            MesaDisplayModeset(i);
-            mesa_renderer_stat(i);
-        }
-        else
-            deactivateSched(d);
-    }
-}
-
 int NumPbuffer(void)
 {
     int i, c;
@@ -574,6 +499,47 @@ int NumPbuffer(void)
     return c;
 }
 
+int DrawableContext(void)
+{
+    return (ctx[0] == glXGetCurrentContext());
+}
+
+static int PbufferGLBinding(const int target)
+{
+    int ret;
+    switch (target) {
+        case WGL_TEXTURE_2D_ARB:
+            ret = GL_TEXTURE_BINDING_2D;
+            break;
+        case WGL_TEXTURE_RECTANGLE_NV:
+            ret = GL_TEXTURE_BINDING_RECTANGLE_NV;
+            break;
+        default:
+            return 0;
+    }
+    return ret;
+}
+static int PbufferGLAttrib(const int attr)
+{
+    int ret;
+    switch (attr) {
+        case WGL_TEXTURE_2D_ARB:
+            ret = GL_TEXTURE_2D;
+            break;
+        case WGL_TEXTURE_RECTANGLE_NV:
+            ret = GL_TEXTURE_RECTANGLE_NV;
+            break;
+        case WGL_TEXTURE_RGB_ARB:
+            ret = GL_RGB;
+            break;
+        case WGL_TEXTURE_RGBA_ARB:
+            ret = GL_RGBA;
+            break;
+        default:
+            return 0;
+    }
+    return ret;
+}
 static int LookupAttribArray(const int *attrib, const int attr)
 {
     int ret = 0;
@@ -608,7 +574,7 @@ static int LookupAttribArray(const int *attrib, const int attr)
 void MGLFuncHandler(const char *name)
 {
     char fname[64];
-    uint32_t *argsp = (uint32_t *)(name + ALIGNED(strnlen(name, sizeof(fname))));
+    uint32_t *argsp = (uint32_t *)(name + ALIGNED((strnlen(name, sizeof(fname))+1)));
     strncpy(fname, name, sizeof(fname)-1);
 
 #define FUNCP_HANDLER(a) \
@@ -682,9 +648,8 @@ void MGLFuncHandler(const char *name)
                 "WGL_ARB_create_context_profile "
                 "WGL_ARB_extensions_string "
                 "WGL_ARB_multisample "
-                "WGL_ARB_pbuffer "
                 "WGL_ARB_pixel_format "
-                "WGL_ARB_render_texture "
+                "WGL_ARB_pbuffer WGL_ARB_render_texture WGL_NV_render_texture_rectangle "
                 "WGL_EXT_extensions_string "
                 "WGL_EXT_swap_control "
                 ;
@@ -761,13 +726,25 @@ void MGLFuncHandler(const char *name)
             argsp[1] = 0x02;
         }
         else {
-            DPRINTF("wglChoosePixelFormatARB()");
+            DPRINTF("%-32s", "wglChoosePixelFormatARB()");
             argsp[1] = MGLChoosePixelFormat();
         }
         argsp[0] = 1;
         return;
     }
     FUNCP_HANDLER("wglBindTexImageARB") {
+        uint32_t i = argsp[0] & (MAX_PBUFFER - 1);
+        if (PbufferGLBinding(hPbuffer[i].target) && PbufferGLAttrib(hPbuffer[i].format)) {
+            int prev_binded_texture = 0;
+            GLXContext prev_context = glXGetCurrentContext();
+            GLXDrawable prev_drawable = glXGetCurrentDrawable();
+            glGetIntegerv(PbufferGLBinding(hPbuffer[i].target), &prev_binded_texture);
+            glXMakeCurrent(dpy, PBDC[i], PBRC[i]);
+            glBindTexture(PbufferGLAttrib(hPbuffer[i].target), prev_binded_texture);
+            glCopyTexImage2D(PbufferGLAttrib(hPbuffer[i].target), hPbuffer[i].level,
+                PbufferGLAttrib(hPbuffer[i].format), 0, 0, hPbuffer[i].width, hPbuffer[i].height, 0);
+            glXMakeCurrent(dpy, prev_drawable, prev_context);
+        }
         argsp[0] = 1;
         return;
     }
@@ -777,21 +754,26 @@ void MGLFuncHandler(const char *name)
     }
     FUNCP_HANDLER("wglCreatePbufferARB") {
         uint32_t i;
-        i = 0; while(hPbuffer[i].width) i++;
-        if (i == MAX_PBUFFER) {
-            DPRINTF("MAX_PBUFFER reached %d", i);
+        for (i = 0; ((i < MAX_PBUFFER) && hPbuffer[i].width); i++);
+        if (MAX_PBUFFER == i) {
+            DPRINTF("MAX_PBUFFER reached %-24u", i);
             argsp[0] = 0;
             return;
         }
         hPbuffer[i].width = argsp[1];
         hPbuffer[i].height = argsp[2];
-        int ia[] = {
+        const int *pattr = (const int *)&argsp[4];
+        hPbuffer[i].target = LookupAttribArray(pattr, WGL_TEXTURE_TARGET_ARB);
+        hPbuffer[i].format = LookupAttribArray(pattr, WGL_TEXTURE_FORMAT_ARB);
+        hPbuffer[i].level = LookupAttribArray(pattr, WGL_MIPMAP_LEVEL_ARB);
+        const int ia[] = {
             GLX_X_RENDERABLE    , True,
             GLX_DRAWABLE_TYPE   , GLX_PBUFFER_BIT,
             GLX_RENDER_TYPE     , GLX_RGBA_BIT,
-            GLX_RED_SIZE        , 8,
-            GLX_GREEN_SIZE      , 8,
-            GLX_BLUE_SIZE       , 8,
+            GLX_DOUBLEBUFFER    , False,
+            GLX_BUFFER_SIZE     , 32,
+            GLX_ALPHA_SIZE      , cAlphaBits,
+            GLX_DEPTH_SIZE      , cDepthBits,
             None,
         };
         int pbcnt, pa[] = {
@@ -801,7 +783,7 @@ void MGLFuncHandler(const char *name)
         };
         GLXFBConfig *pbcnf = glXChooseFBConfig(dpy, DefaultScreen(dpy), ia, &pbcnt);
         PBDC[i] = glXCreatePbuffer(dpy, pbcnf[0], pa);
-        PBRC[i] = glXCreateNewContext(dpy, pbcnf[0], GLX_RGBA_TYPE, ctx[0], true);
+        PBRC[i] = glXCreateNewContext(dpy, pbcnf[0], GLX_RGBA_TYPE, glXGetCurrentContext(), true);
         XFree(pbcnf);
         argsp[0] = 1;
         argsp[1] = i;
@@ -813,19 +795,35 @@ void MGLFuncHandler(const char *name)
         glXDestroyContext(dpy, PBRC[i]);
         glXDestroyPbuffer(dpy, PBDC[i]);
         PBRC[i] = 0; PBDC[i] = 0;
-        memset(&hPbuffer[i], 0, sizeof(HPBUFFERARB));
         argsp[0] = 1;
+        memset(&hPbuffer[i], 0, sizeof(HPBUFFERARB));
         return;
     }
     FUNCP_HANDLER("wglQueryPbufferARB") {
-        uint32_t i;
+        uint32_t i = argsp[0] & (MAX_PBUFFER - 1);
 #define WGL_PBUFFER_WIDTH_ARB   0x2034
 #define WGL_PBUFFER_HEIGHT_ARB  0x2035
-        int attr = argsp[1];
-        i = argsp[0] & (MAX_PBUFFER - 1);
-        argsp[1] = (attr == WGL_PBUFFER_WIDTH_ARB)? hPbuffer[i].width:argsp[1];
-        argsp[1] = (attr == WGL_PBUFFER_HEIGHT_ARB)? hPbuffer[i].height:argsp[1];
-        argsp[0] = (argsp[1] == attr)? 0:1;
+        switch(argsp[1]) {
+            case WGL_PBUFFER_WIDTH_ARB:
+                argsp[2] = hPbuffer[i].width;
+                break;
+            case WGL_PBUFFER_HEIGHT_ARB:
+                argsp[2] = hPbuffer[i].height;
+                break;
+            case WGL_TEXTURE_TARGET_ARB:
+                argsp[2] = hPbuffer[i].target;
+                break;
+            case WGL_TEXTURE_FORMAT_ARB:
+                argsp[2] = hPbuffer[i].format;
+                break;
+            case WGL_MIPMAP_LEVEL_ARB:
+                argsp[2] = hPbuffer[i].level;
+                break;
+            default:
+                argsp[0] = 0;
+                return;
+        }
+        argsp[0] = 1;
         return;
     }
     FUNCP_HANDLER("wglGetDeviceGammaRamp3DFX") {

@@ -18,9 +18,11 @@ GENDEF=gendef
 OUTDIR=$(shell basename `pwd`)
 
 C_OBJS:=\
-	fxhook.o \
-	fxlib9x.o \
-	fxlibnt.o \
+    fxhook.o \
+    fxhpat.o \
+    fxlib9x.o \
+    fxlibnt.o \
+    md5.o \
 
 
 all: $(C_OBJS) $(TARGET1) $(TARGET2) $(TARGET3) fxdrv

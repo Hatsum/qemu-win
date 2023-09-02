@@ -36,11 +36,23 @@
 const char dllname[] = "/System/Library/Frameworks/OpenGL.framework/Libraries/libGL.dylib";
 int MGLUpdateGuestBufo(mapbufo_t *bufo, int add) { return 0; }
 #define GL_CONTEXTALPHA GetDispTimerMS()
+#define GL_RENDER_TEXTURE_STR
+#define GL_RENDER_TEXTURE_VAR
+#define GL_PBUFFER_CONTEXT(x) { /* Pbuffer unsupported */ }
+#define GL_TEXIMAGE_BIND(x) \
+    (void)PbufferGLBinding(GL_NONE); \
+    (void)PbufferGLAttrib(GL_NONE); \
+    (void)x
+#define GL_PBUFFER_CREATE(x) \
+    DPRINTF("Unsupported %s", "wglCreatePbufferARB"); argsp[0] = 0
+#define GL_PBUFFER_DESTROY(x) \
+    DPRINTF("Unsupported %s", "wglDestroyPbufferARB"); argsp[0] = 0
 #define GL_DELETECONTEXT(x)
 #define GL_CONTEXTATTRIB(x)
 #define GL_CREATECONTEXT(x)
 #endif
 #if defined(CONFIG_LINUX) && CONFIG_LINUX
+#include <GL/glx.h>
 #include "sysemu/kvm.h"
 
 int MGLUpdateGuestBufo(mapbufo_t *bufo, int add)
@@ -58,9 +70,60 @@ int MGLUpdateGuestBufo(mapbufo_t *bufo, int add)
     return ret;
 }
 #define GL_CONTEXTALPHA 1
+#define GL_RENDER_TEXTURE_STR \
+    "WGL_ARB_pbuffer WGL_ARB_render_texture WGL_NV_render_texture_rectangle "
+#define GL_RENDER_TEXTURE_VAR \
+    static Display *dpy; \
+    static GLXPbuffer PBDC[MAX_PBUFFER]; \
+    static GLXContext PBRC[MAX_PBUFFER];
+#define GL_PBUFFER_CONTEXT(x) \
+    do { \
+        SDL_GL_MakeCurrent(window, NULL); \
+        if (dpy) glXMakeContextCurrent(dpy, PBDC[x], PBDC[x], PBRC[x]); \
+    } while(0)
+#define GL_TEXIMAGE_BIND(x) \
+    if (PbufferGLBinding(hPbuffer[x].target) && PbufferGLAttrib(hPbuffer[x].format)) { \
+        int prev_binded_texture = 0; \
+        GLXContext prev_context = glXGetCurrentContext(); \
+        GLXDrawable prev_drawable = glXGetCurrentDrawable(); \
+        glGetIntegerv(PbufferGLBinding(hPbuffer[x].target), &prev_binded_texture); \
+        glXMakeCurrent(dpy, PBDC[x], PBRC[x]); \
+        glBindTexture(PbufferGLAttrib(hPbuffer[x].target), prev_binded_texture); \
+        glCopyTexImage2D(PbufferGLAttrib(hPbuffer[x].target), hPbuffer[x].level, \
+            PbufferGLAttrib(hPbuffer[x].format), 0, 0, hPbuffer[x].width, hPbuffer[x].height, 0); \
+        glXMakeCurrent(dpy, prev_drawable, prev_context); \
+    }
+#define GL_PBUFFER_CREATE(x) \
+    const int ia[] = { \
+        GLX_X_RENDERABLE    , True, \
+        GLX_DRAWABLE_TYPE   , GLX_PBUFFER_BIT, \
+        GLX_RENDER_TYPE     , GLX_RGBA_BIT, \
+        GLX_DOUBLEBUFFER    , False, \
+        GLX_BUFFER_SIZE     , 32, \
+        GLX_ALPHA_SIZE      , cAlphaBits, \
+        GLX_DEPTH_SIZE      , cDepthBits, \
+        None, \
+    };\
+    int pbcnt, pa[] = { \
+        GLX_PBUFFER_WIDTH, hPbuffer[x].width, \
+        GLX_PBUFFER_HEIGHT, hPbuffer[x].height, \
+        None, \
+    }; \
+    if (!dpy) dpy = glXGetCurrentDisplay(); \
+    GLXFBConfig *pbcnf = glXChooseFBConfig(dpy, DefaultScreen(dpy), ia, &pbcnt); \
+    PBDC[x] = glXCreatePbuffer(dpy, pbcnf[0], pa); \
+    PBRC[x] = glXCreateNewContext(dpy, pbcnf[0], GLX_RGBA_TYPE, glXGetCurrentContext(), true); \
+    XFree(pbcnf); \
+    argsp[0] = 1
+#define GL_PBUFFER_DESTROY(x) \
+    glXDestroyContext(dpy, PBRC[x]);\
+    glXDestroyPbuffer(dpy, PBDC[x]);\
+    PBRC[x] = 0; PBDC[x] = 0; \
+    argsp[0] = 1
 #define GL_DELETECONTEXT(x) \
     do { SDL_GL_DeleteContext(x); x = 0; } while(0)
 #define GL_CONTEXTATTRIB(x) \
+    MGLActivateHandler(0, 0); \
     do { \
         int major, minor, pfmsk, flags; \
         major = LookupAttribArray((const int *)&argsp[2], WGL_CONTEXT_MAJOR_VERSION_ARB); \
@@ -171,18 +234,30 @@ typedef struct tagPIXELFORMATDESCRIPTOR {
 #define WGL_TYPE_COLORINDEX_ARB                 0x202C
 #define WGL_SAMPLE_BUFFERS_ARB                  0x2041
 #define WGL_SAMPLES_ARB                         0x2042
-
-/* WGL_ARB_create_context
+/*
+ * WGL_ARB_create_context
  * WGL_ARB_create_context_profile
  */
 #define WGL_CONTEXT_MAJOR_VERSION_ARB           0x2091
 #define WGL_CONTEXT_MINOR_VERSION_ARB           0x2092
 #define WGL_CONTEXT_FLAGS_ARB                   0x2094
 #define WGL_CONTEXT_PROFILE_MASK_ARB            0x9126
+/*
+ * WGL_ARB_render_texture
+ * WGL_NV_render_texture_rectangle
+*/
+#define WGL_TEXTURE_FORMAT_ARB                  0x2072
+#define WGL_TEXTURE_RGB_ARB                     0x2075
+#define WGL_TEXTURE_RGBA_ARB                    0x2076
+#define WGL_TEXTURE_TARGET_ARB                  0x2073
+#define WGL_TEXTURE_2D_ARB                      0x207A
+#define WGL_TEXTURE_RECTANGLE_NV                0x20A2
+#define WGL_MIPMAP_LEVEL_ARB                    0x207B
 
 typedef struct tagFakePBuffer {
     int width;
     int height;
+    int target, format, level;
 } HPBUFFERARB;
 
 static const PIXELFORMATDESCRIPTOR pfd = {
@@ -223,11 +298,12 @@ static const int iAttribs[] = {
 
 static SDL_Window *window;
 static SDL_GLContext ctx[MAX_LVLCNTX];
+GL_RENDER_TEXTURE_VAR;
 
 static HPBUFFERARB hPbuffer[MAX_PBUFFER];
 static int wnd_ready;
-static int cDepthBits, cStencilBits, cAuxBuffers;
-static int cSampleBuf[2];
+static int cAlphaBits, cDepthBits, cStencilBits;
+static int cAuxBuffers, cSampleBuf[2];
 
 int glwnd_ready(void) { return wnd_ready; }
 
@@ -277,7 +353,7 @@ void MGLTmpContext(void)
 
 void MGLDeleteContext(int level)
 {
-    int n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
     SDL_GL_MakeCurrent(window, NULL);
     if (n == 0) {
         for (int i = MAX_LVLCNTX; i > 1;) {
@@ -285,6 +361,7 @@ void MGLDeleteContext(int level)
                 GL_DELETECONTEXT(ctx[i]);
             }
         }
+        MesaBlitFree();
     }
     GL_DELETECONTEXT(ctx[n]);
     if (!n)
@@ -322,7 +399,8 @@ int MGLCreateContext(uint32_t gDC)
 
 int MGLMakeCurrent(uint32_t cntxRC, int level)
 {
-    uint32_t i = cntxRC & (MAX_PBUFFER - 1), n = (level >= MAX_LVLCNTX)? (MAX_LVLCNTX - 1):level;
+    int n = (level)? ((level % MAX_LVLCNTX)? (level % MAX_LVLCNTX):1):level;
+    uint32_t i = cntxRC & (MAX_PBUFFER - 1);
     if (cntxRC == (MESAGL_MAGIC - n)) {
         SDL_GL_MakeCurrent(window, ctx[n]);
         InitMesaGLExt();
@@ -335,7 +413,7 @@ int MGLMakeCurrent(uint32_t cntxRC, int level)
             MGLActivateHandler(1, 0);
     }
     if (cntxRC == (((MESAGL_MAGIC & 0xFFFFFFFU) << 4) | i))
-    { /* Pbuffer unsupported */ }
+        GL_PBUFFER_CONTEXT(i);
 
     return 0;
 }
@@ -343,6 +421,7 @@ int MGLMakeCurrent(uint32_t cntxRC, int level)
 int MGLSwapBuffers(void)
 {
     MGLActivateHandler(1, 0);
+    MesaBlitScale();
     SDL_GL_SwapWindow(window);
     return 1;
 }
@@ -351,8 +430,7 @@ static int MGLPresetPixelFormat(void)
 {
     wnd_ready = 0;
     ImplMesaGLReset();
-    DPRINTF_COND(GetGLScaleWidth(), "MESAGL window scaled at width %d", GetGLScaleWidth());
-    mesa_prepare_window(GetContextMSAA(), GL_CONTEXTALPHA, GetGLScaleWidth(), &cwnd_mesagl);
+    mesa_prepare_window(GetContextMSAA(), GL_CONTEXTALPHA, 0, &cwnd_mesagl);
 
     MesaInitGammaRamp();
     return 1;
@@ -375,12 +453,12 @@ int MGLSetPixelFormat(int fmt, const void *p)
         ctx[0] = (ctx[0])? ctx[0]:SDL_GL_GetCurrentContext();
         ctx[0] = (ctx[0])? ctx[0]:SDL_GL_CreateContext(window);
         if (ctx[0]) {
-            int cColors[4];
+            int cColors[3];
             SDL_GL_MakeCurrent(window, ctx[0]);
-            SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &cColors[0]);
-            SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &cColors[1]);
-            SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &cColors[2]);
-            SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &cColors[3]);
+            SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &cAlphaBits);
+            SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &cColors[0]);
+            SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &cColors[1]);
+            SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &cColors[2]);
             SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &cDepthBits);
             SDL_GL_GetAttribute(SDL_GL_STENCIL_SIZE, &cStencilBits);
             SDL_GL_GetAttribute(SDL_GL_MULTISAMPLEBUFFERS, &cSampleBuf[0]);
@@ -388,7 +466,7 @@ int MGLSetPixelFormat(int fmt, const void *p)
             glGetIntegerv(GL_AUX_BUFFERS, &cAuxBuffers);
             DPRINTF("%s OpenGL %s", glGetString(GL_RENDERER), glGetString(GL_VERSION));
             DPRINTF("Pixel Format ABGR%d%d%d%d D%2dS%d nAux %d nSamples %d %d %s",
-                    cColors[0], cColors[1], cColors[2], cColors[3], cDepthBits, cStencilBits,
+                    cAlphaBits, cColors[0], cColors[1], cColors[2], cDepthBits, cStencilBits,
                     cAuxBuffers, cSampleBuf[0], cSampleBuf[1], ContextUseSRGB()? "sRGB":"");
         }
     }
@@ -420,24 +498,6 @@ int MGLDescribePixelFormat(int fmt, unsigned int sz, void *p)
     return 1;
 }
 
-void MGLActivateHandler(const int i, const int d)
-{
-    static int last;
-
-#define WA_ACTIVE 1
-#define WA_INACTIVE 0
-    if (i != last) {
-        last = i;
-        DPRINTF_COND(GLFuncTrace(), "wm_activate %-32d", i);
-        if (i) {
-            deactivateCancel();
-            mesa_renderer_stat(i);
-        }
-        else
-            deactivateSched(d);
-    }
-}
-
 int NumPbuffer(void)
 {
     int i, c;
@@ -446,6 +506,47 @@ int NumPbuffer(void)
     return c;
 }
 
+int DrawableContext(void)
+{
+    return SDL_GL_GetCurrentContext()? 1:0;
+}
+
+static int PbufferGLBinding(const int target)
+{
+    int ret;
+    switch (target) {
+        case WGL_TEXTURE_2D_ARB:
+            ret = GL_TEXTURE_BINDING_2D;
+            break;
+        case WGL_TEXTURE_RECTANGLE_NV:
+            ret = GL_TEXTURE_BINDING_RECTANGLE_NV;
+            break;
+        default:
+            return 0;
+    }
+    return ret;
+}
+static int PbufferGLAttrib(const int attr)
+{
+    int ret;
+    switch (attr) {
+        case WGL_TEXTURE_2D_ARB:
+            ret = GL_TEXTURE_2D;
+            break;
+        case WGL_TEXTURE_RECTANGLE_NV:
+            ret = GL_TEXTURE_RECTANGLE_NV;
+            break;
+        case WGL_TEXTURE_RGB_ARB:
+            ret = GL_RGB;
+            break;
+        case WGL_TEXTURE_RGBA_ARB:
+            ret = GL_RGBA;
+            break;
+        default:
+            return 0;
+    }
+    return ret;
+}
 static int LookupAttribArray(const int *attrib, const int attr)
 {
     int ret = 0;
@@ -480,7 +581,7 @@ static int LookupAttribArray(const int *attrib, const int attr)
 void MGLFuncHandler(const char *name)
 {
     char fname[64];
-    uint32_t *argsp = (uint32_t *)(name + ALIGNED(strnlen(name, sizeof(fname))));
+    uint32_t *argsp = (uint32_t *)(name + ALIGNED((strnlen(name, sizeof(fname))+1)));
     strncpy(fname, name, sizeof(fname)-1);
 
 #define FUNCP_HANDLER(a) \
@@ -529,7 +630,9 @@ void MGLFuncHandler(const char *name)
                 "WGL_ARB_create_context "
                 "WGL_ARB_create_context_profile "
                 "WGL_ARB_extensions_string "
+                "WGL_ARB_multisample "
                 "WGL_ARB_pixel_format "
+                GL_RENDER_TEXTURE_STR
                 "WGL_EXT_extensions_string "
                 "WGL_EXT_swap_control "
                 ;
@@ -547,7 +650,6 @@ void MGLFuncHandler(const char *name)
             if (argsp[1] == 0) {
                 SDL_GL_MakeCurrent(window, NULL);
                 GL_DELETECONTEXT(ctx[0]);
-                MGLActivateHandler(0, 0);
                 GL_CONTEXTATTRIB(ctx[0]);
                 GL_CREATECONTEXT(ctx[0]);
                 ret = (ctx[0])? 1:0;
@@ -589,13 +691,15 @@ void MGLFuncHandler(const char *name)
             argsp[1] = 0x02;
         }
         else {
-            DPRINTF("wglChoosePixelFormatARB()");
+            DPRINTF("%-32s", "wglChoosePixelFormatARB()");
             argsp[1] = MGLChoosePixelFormat();
         }
         argsp[0] = 1;
         return;
     }
     FUNCP_HANDLER("wglBindTexImageARB") {
+        uint32_t i = argsp[0] & (MAX_PBUFFER - 1);
+        GL_TEXIMAGE_BIND(i);
         argsp[0] = 1;
         return;
     }
@@ -604,18 +708,55 @@ void MGLFuncHandler(const char *name)
         return;
     }
     FUNCP_HANDLER("wglCreatePbufferARB") {
-        DPRINTF("Unsupported wglCreatePbufferARB");
-        argsp[0] = 0;
+        uint32_t i;
+        for (i = 0; ((i < MAX_PBUFFER) && hPbuffer[i].width); i++);
+        if (MAX_PBUFFER == i) {
+            DPRINTF("MAX_PBUFFER reached %-24u", i);
+            argsp[0] = 0;
+            return;
+        }
+        hPbuffer[i].width = argsp[1];
+        hPbuffer[i].height = argsp[2];
+        const int *pattr = (const int *)&argsp[4];
+        hPbuffer[i].target = LookupAttribArray(pattr, WGL_TEXTURE_TARGET_ARB);
+        hPbuffer[i].format = LookupAttribArray(pattr, WGL_TEXTURE_FORMAT_ARB);
+        hPbuffer[i].level = LookupAttribArray(pattr, WGL_MIPMAP_LEVEL_ARB);
+        GL_PBUFFER_CREATE(i);
+        argsp[1] = i;
         return;
     }
     FUNCP_HANDLER("wglDestroyPbufferARB") {
-        DPRINTF("Unsupported wglDestroyPbufferARB");
-        argsp[0] = 0;
+        uint32_t i;
+        i = argsp[0] & (MAX_PBUFFER - 1);
+        GL_PBUFFER_DESTROY(i);
+        memset(&hPbuffer[i], 0, sizeof(HPBUFFERARB));
         return;
     }
     FUNCP_HANDLER("wglQueryPbufferARB") {
-        DPRINTF("Unsupported wglQueryPbufferARB");
-        argsp[0] = 0;
+        uint32_t i = argsp[0] & (MAX_PBUFFER - 1);
+#define WGL_PBUFFER_WIDTH_ARB   0x2034
+#define WGL_PBUFFER_HEIGHT_ARB  0x2035
+        switch(argsp[1]) {
+            case WGL_PBUFFER_WIDTH_ARB:
+                argsp[2] = hPbuffer[i].width;
+                break;
+            case WGL_PBUFFER_HEIGHT_ARB:
+                argsp[2] = hPbuffer[i].height;
+                break;
+            case WGL_TEXTURE_TARGET_ARB:
+                argsp[2] = hPbuffer[i].target;
+                break;
+            case WGL_TEXTURE_FORMAT_ARB:
+                argsp[2] = hPbuffer[i].format;
+                break;
+            case WGL_MIPMAP_LEVEL_ARB:
+                argsp[2] = hPbuffer[i].level;
+                break;
+            default:
+                argsp[0] = 0;
+                return;
+        }
+        argsp[0] = 1;
         return;
     }
     FUNCP_HANDLER("wglGetDeviceGammaRamp3DFX") {
