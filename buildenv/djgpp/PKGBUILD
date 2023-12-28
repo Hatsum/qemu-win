@@ -1,0 +1,49 @@
+# Based on Build-DJGPP (https://github.com/jwt27/build-gcc)
+
+_enable_fortran=0
+_enable_ada=0
+_enable_objc=0
+pkgbase="djgpp"
+pkgname=("${pkgbase}")
+pkgver=12.2.0
+_target="i686-pc-msdosdjgpp"
+pkgrel=1
+pkgdesc="GCC for the djgpp cross-compiler"
+arch=("${MSYSTEM_CARCH}")
+url="https://www.delorie.com/djgpp/"
+license=('GPL2' 'LGPL2')
+groups=("djgpp-toolchain")
+makedepends=("autoconf"
+             "automake"
+             "bison"
+             "dejagnu"
+             "diffutils"
+             "dos2unix"
+             "emacs"
+             "expect"
+             "flex"
+             "gcc"
+             "git"
+             "libiconv-devel"
+             "libzstd-devel"
+             "m4"
+             "make"
+             "nasm"
+             "patch"
+             "pkgconf"
+             "python"
+             "texinfo"
+             "unzip"
+             "zlib-devel")
+options=('!strip' 'staticlibs' '!emptydirs' '!buildflags')
+source=("git+https://github.com/jwt27/build-gcc.git#commit=db607561c076971bcdc807acc3bce4162e48b6b3")
+sha1sums=("SKIP")
+
+package() {
+    lang="c,c++"
+    [ ${_enable_fortran} -eq 1 ] && lang="${lang},fortran"
+    [ ${_enable_ada} -eq 1 ] && lang="${lang},ada"
+    [ ${_enable_objc} -eq 1 ] && lang="${lang},objc,obj-c++"
+    cd ${srcdir}/build-gcc
+    env DESTDIR=${pkgdir} ./build-djgpp.sh --prefix=/opt/djgpp --target="${_target}" --enable-languages="${lang}" --batch djgpp-cvs binutils-2.40 gcc-12.2.0 gdb
+}

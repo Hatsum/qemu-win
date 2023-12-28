@@ -4,7 +4,6 @@ pkgver=2.0
 pkgrel=8
 pkgdesc="The Open Watcom Fortran/C/C++ compiler, binary distribution -V2 fork"
 arch=('x86_64')
-#url="http://www.openwatcom.org"
 url="https://github.com/open-watcom"
 license=('custom:OWPL-1')
 source=('https://github.com/open-watcom/open-watcom-v2/releases/download/Last-CI-build/ow-snapshot.tar.xz'
@@ -14,10 +13,6 @@ noextract=('ow-snapshot.tar.gz')
 md5sums=('SKIP'
          '2313cb4ed233b8a0acdd593d3c458dbb')
 options=(!strip)
-
-build() {
-    ls 
-}
 
 package() {
     mkdir -p "${pkgdir}/opt/watcom"
